@@ -275,7 +275,6 @@ function createDayColumn(date, dateKey) {
     // Add task area
     const addTaskArea = document.createElement('div');
     addTaskArea.className = 'add-task-area';
-    addTaskArea.textContent = t('addTask');
     addTaskArea.onclick = () => createNewTask(dateKey, tasksContainer);
 
     // Drag and drop for add task area
@@ -885,7 +884,6 @@ function renderSomedayTasks() {
 
     const addTaskArea = document.createElement('div');
     addTaskArea.className = 'add-task-area';
-    addTaskArea.textContent = t('addTask');
     addTaskArea.onclick = () => createNewTask('someday', somedayContainer);
 
     // Drag and drop

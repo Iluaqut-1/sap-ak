@@ -264,18 +264,21 @@ function createDayColumn(date, dateKey) {
     tasksContainer.className = 'day-tasks';
     tasksContainer.dataset.day = dateKey;
 
-    // Make entire tasks container droppable
+    // Make entire tasks container droppable and clickable to add tasks
     tasksContainer.addEventListener('dragover', handleDragOver);
     tasksContainer.addEventListener('drop', (e) => handleDrop(e, dateKey));
     tasksContainer.addEventListener('dragleave', handleDragLeave);
 
-    // Add task area (now at the top)
-    const addTaskArea = document.createElement('div');
-    addTaskArea.className = 'add-task-area';
-    addTaskArea.onclick = () => createNewTask(dateKey, tasksContainer);
+    // Add touch events for mobile drag and drop
+    tasksContainer.addEventListener('touchmove', handleTouchMove);
+    tasksContainer.addEventListener('touchend', (e) => handleTouchEnd(e, dateKey));
 
-    // Append add task area first
-    tasksContainer.appendChild(addTaskArea);
+    // Click on empty area to add task
+    tasksContainer.addEventListener('click', (e) => {
+        if (e.target === tasksContainer) {
+            createNewTask(dateKey, tasksContainer);
+        }
+    });
 
     // Render tasks for this day
     if (tasks[dateKey]) {
@@ -283,6 +286,15 @@ function createDayColumn(date, dateKey) {
             const taskEl = createTaskElement(task, dateKey);
             tasksContainer.appendChild(taskEl);
         });
+    }
+
+    // If no tasks, show placeholder
+    if (!tasks[dateKey] || tasks[dateKey].length === 0) {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'task-placeholder';
+        placeholder.textContent = t('addTask');
+        placeholder.onclick = () => createNewTask(dateKey, tasksContainer);
+        tasksContainer.appendChild(placeholder);
     }
 
     dayColumn.appendChild(header);
@@ -320,6 +332,15 @@ function createTaskElement(task, dateKey) {
         e.stopPropagation();
         isCloning = false;
         handleDragEnd(e);
+    });
+    cloneIcon.addEventListener('touchstart', (e) => {
+        e.stopPropagation();
+        isCloning = true;
+        handleTouchStart(e, task, dateKey);
+    });
+    cloneIcon.addEventListener('touchend', (e) => {
+        e.stopPropagation();
+        isCloning = false;
     });
     taskEl.appendChild(cloneIcon);
 
@@ -372,6 +393,11 @@ function createTaskElement(task, dateKey) {
     taskEl.addEventListener('dragleave', handleTaskDragLeave);
     taskEl.addEventListener('drop', (e) => handleTaskDrop(e, task, dateKey));
 
+    // Touch events for mobile
+    taskEl.addEventListener('touchstart', (e) => handleTouchStart(e, task, dateKey));
+    taskEl.addEventListener('touchmove', handleTouchMove);
+    taskEl.addEventListener('touchend', (e) => handleTouchEnd(e, dateKey));
+
     return taskEl;
 }
 
@@ -418,6 +444,12 @@ function formatTaskText(text) {
 
 // Create new task
 function createNewTask(dateKey, container) {
+    // Remove placeholder if it exists
+    const placeholder = container.querySelector('.task-placeholder');
+    if (placeholder) {
+        placeholder.remove();
+    }
+
     const input = document.createElement('textarea');
     input.className = 'task-input';
     input.placeholder = 'Enter task...';
@@ -435,12 +467,13 @@ function createNewTask(dateKey, container) {
             if (!tasks[dateKey]) {
                 tasks[dateKey] = [];
             }
-            // Insert at beginning so new tasks appear right after add-task-area
-            tasks[dateKey].unshift(task);
+            tasks[dateKey].push(task);
             saveTasksToStorage();
             renderWeek();
         } else {
             input.remove();
+            // Re-render to show placeholder if no tasks
+            renderWeek();
         }
     };
 
@@ -451,6 +484,10 @@ function createNewTask(dateKey, container) {
             saveTask();
         } else if (e.key === 'Escape') {
             input.remove();
+            // Re-render to show placeholder if no tasks
+            if (!tasks[dateKey] || tasks[dateKey].length === 0) {
+                renderWeek();
+            }
         }
     };
 
@@ -723,6 +760,11 @@ function handleDragStart(e, task, dateKey) {
     draggedTask = { task, dateKey };
     e.target.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move';
+
+    // Haptic feedback on drag start
+    if (navigator.vibrate) {
+        navigator.vibrate(50);
+    }
 }
 
 function handleDragEnd(e) {
@@ -772,6 +814,11 @@ function handleDrop(e, targetDateKey) {
                 tasks[targetDateKey] = [];
             }
             tasks[targetDateKey].push(task);
+        }
+
+        // Haptic feedback on drop
+        if (navigator.vibrate) {
+            navigator.vibrate(50);
         }
 
         saveTasksToStorage();
@@ -869,8 +916,213 @@ function handleTaskDrop(e, targetTask, targetDateKey) {
         }
     }
 
+    // Haptic feedback on drop
+    if (navigator.vibrate) {
+        navigator.vibrate(50);
+    }
+
     saveTasksToStorage();
     renderWeek();
+}
+
+// Touch event handlers for mobile drag and drop
+let touchStartData = null;
+let touchDraggedElement = null;
+let ghostElement = null;
+
+function handleTouchStart(e, task, dateKey) {
+    // Don't interfere with scrolling or other interactions if not pressing directly on the task
+    const target = e.target;
+    if (target.tagName === 'BUTTON' || target.tagName === 'TEXTAREA' || target.classList.contains('task-action-btn')) {
+        return;
+    }
+
+    // Only start drag if touch is held for a moment (long press)
+    const touchTimeout = setTimeout(() => {
+        const touch = e.touches[0];
+        draggedTask = { task, dateKey };
+        touchDraggedElement = e.currentTarget;
+        touchStartData = {
+            startX: touch.clientX,
+            startY: touch.clientY,
+            offsetX: touch.clientX - e.currentTarget.getBoundingClientRect().left,
+            offsetY: touch.clientY - e.currentTarget.getBoundingClientRect().top
+        };
+
+        // Haptic feedback on drag start
+        if (navigator.vibrate) {
+            navigator.vibrate(50);
+        }
+
+        // Create ghost element
+        ghostElement = e.currentTarget.cloneNode(true);
+        ghostElement.style.position = 'fixed';
+        ghostElement.style.zIndex = '10000';
+        ghostElement.style.pointerEvents = 'none';
+        ghostElement.style.opacity = '0.8';
+        ghostElement.style.width = e.currentTarget.offsetWidth + 'px';
+        ghostElement.style.left = (touch.clientX - touchStartData.offsetX) + 'px';
+        ghostElement.style.top = (touch.clientY - touchStartData.offsetY) + 'px';
+        document.body.appendChild(ghostElement);
+
+        e.currentTarget.classList.add('dragging');
+    }, 300); // 300ms long press
+
+    e.currentTarget.addEventListener('touchend', () => {
+        clearTimeout(touchTimeout);
+    }, { once: true });
+
+    e.currentTarget.addEventListener('touchmove', () => {
+        clearTimeout(touchTimeout);
+    }, { once: true });
+}
+
+function handleTouchMove(e) {
+    if (!touchDraggedElement || !ghostElement) return;
+
+    e.preventDefault(); // Prevent scrolling while dragging
+    const touch = e.touches[0];
+
+    // Move ghost element
+    ghostElement.style.left = (touch.clientX - touchStartData.offsetX) + 'px';
+    ghostElement.style.top = (touch.clientY - touchStartData.offsetY) + 'px';
+
+    // Find element under touch
+    ghostElement.style.pointerEvents = 'none';
+    const elementUnderTouch = document.elementFromPoint(touch.clientX, touch.clientY);
+    ghostElement.style.pointerEvents = 'none';
+
+    // Remove all drag-over classes
+    document.querySelectorAll('.drag-over, .drag-over-task').forEach(el => {
+        el.classList.remove('drag-over', 'drag-over-task');
+    });
+
+    // Add drag-over class to valid drop targets
+    if (elementUnderTouch) {
+        const dayTasks = elementUnderTouch.closest('.day-tasks');
+        if (dayTasks) {
+            dayTasks.classList.add('drag-over');
+        }
+
+        const taskItem = elementUnderTouch.closest('.task-item');
+        if (taskItem && taskItem !== touchDraggedElement) {
+            taskItem.classList.add('drag-over-task');
+        }
+    }
+}
+
+function handleTouchEnd(e, targetDateKey) {
+    if (!touchDraggedElement || !draggedTask) {
+        return;
+    }
+
+    const touch = e.changedTouches[0];
+
+    // Find element under touch
+    const elementUnderTouch = document.elementFromPoint(touch.clientX, touch.clientY);
+
+    // Remove ghost element
+    if (ghostElement) {
+        ghostElement.remove();
+        ghostElement = null;
+    }
+
+    // Remove dragging class
+    touchDraggedElement.classList.remove('dragging');
+
+    // Remove drag-over classes
+    document.querySelectorAll('.drag-over, .drag-over-task').forEach(el => {
+        el.classList.remove('drag-over', 'drag-over-task');
+    });
+
+    if (elementUnderTouch) {
+        // Find the day tasks container
+        let dayTasks = elementUnderTouch.closest('.day-tasks');
+        if (!dayTasks && elementUnderTouch.classList.contains('day-tasks')) {
+            dayTasks = elementUnderTouch;
+        }
+
+        // Check if dropping on a task for reordering
+        const taskItem = elementUnderTouch.closest('.task-item');
+
+        if (taskItem && taskItem !== touchDraggedElement && dayTasks) {
+            // Reordering: drop on a task
+            const targetTaskId = taskItem.dataset.taskId;
+            const targetTaskDateKey = dayTasks.dataset.day;
+            const targetTask = tasks[targetTaskDateKey]?.find(t => t.id === targetTaskId);
+
+            if (targetTask) {
+                const { task: draggedTaskData, dateKey: sourceDateKey } = draggedTask;
+                const rect = taskItem.getBoundingClientRect();
+                const mouseY = touch.clientY;
+                const targetMiddle = rect.top + rect.height / 2;
+                const insertBefore = mouseY < targetMiddle;
+
+                if (sourceDateKey === targetTaskDateKey) {
+                    // Reordering within the same day
+                    const taskArray = tasks[sourceDateKey];
+                    const draggedIndex = taskArray.findIndex(t => t.id === draggedTaskData.id);
+                    const targetIndex = taskArray.findIndex(t => t.id === targetTask.id);
+
+                    taskArray.splice(draggedIndex, 1);
+                    let newTargetIndex = taskArray.findIndex(t => t.id === targetTask.id);
+                    const insertIndex = insertBefore ? newTargetIndex : newTargetIndex + 1;
+                    taskArray.splice(insertIndex, 0, draggedTaskData);
+                } else {
+                    // Moving between days
+                    tasks[sourceDateKey] = tasks[sourceDateKey].filter(t => t.id !== draggedTaskData.id);
+                    if (tasks[sourceDateKey].length === 0) {
+                        delete tasks[sourceDateKey];
+                    }
+
+                    if (!tasks[targetTaskDateKey]) {
+                        tasks[targetTaskDateKey] = [];
+                    }
+                    const targetIndex = tasks[targetTaskDateKey].findIndex(t => t.id === targetTask.id);
+                    const insertIndex = insertBefore ? targetIndex : targetIndex + 1;
+                    tasks[targetTaskDateKey].splice(insertIndex, 0, draggedTaskData);
+                }
+
+                // Haptic feedback on drop
+                if (navigator.vibrate) {
+                    navigator.vibrate(50);
+                }
+
+                saveTasksToStorage();
+                renderWeek();
+            }
+        } else if (dayTasks) {
+            // Dropping on a day container
+            const dropDateKey = dayTasks.dataset.day;
+            const { task, dateKey: sourceDateKey } = draggedTask;
+
+            if (sourceDateKey !== dropDateKey) {
+                // Move task
+                tasks[sourceDateKey] = tasks[sourceDateKey].filter(t => t.id !== task.id);
+                if (tasks[sourceDateKey].length === 0) {
+                    delete tasks[sourceDateKey];
+                }
+
+                if (!tasks[dropDateKey]) {
+                    tasks[dropDateKey] = [];
+                }
+                tasks[dropDateKey].push(task);
+
+                // Haptic feedback on drop
+                if (navigator.vibrate) {
+                    navigator.vibrate(50);
+                }
+
+                saveTasksToStorage();
+                renderWeek();
+            }
+        }
+    }
+
+    // Reset
+    touchDraggedElement = null;
+    draggedTask = null;
+    touchStartData = null;
 }
 
 // Someday section
@@ -878,25 +1130,37 @@ function renderSomedayTasks() {
     const somedayContainer = document.getElementById('somedayTasks');
     somedayContainer.innerHTML = '';
 
-    // Make entire someday container droppable
+    // Make entire someday container droppable and clickable
     somedayContainer.addEventListener('dragover', handleDragOver);
     somedayContainer.addEventListener('drop', (e) => handleDrop(e, 'someday'));
     somedayContainer.addEventListener('dragleave', handleDragLeave);
 
-    // Add task area (at the top)
-    const addTaskArea = document.createElement('div');
-    addTaskArea.className = 'add-task-area';
-    addTaskArea.onclick = () => createNewTask('someday', somedayContainer);
+    // Add touch events for mobile
+    somedayContainer.addEventListener('touchmove', handleTouchMove);
+    somedayContainer.addEventListener('touchend', (e) => handleTouchEnd(e, 'someday'));
 
-    // Append add task area first
-    somedayContainer.appendChild(addTaskArea);
+    // Click on empty area to add task
+    somedayContainer.addEventListener('click', (e) => {
+        if (e.target === somedayContainer) {
+            createNewTask('someday', somedayContainer);
+        }
+    });
 
-    // Render tasks below
+    // Render tasks
     if (tasks['someday']) {
         tasks['someday'].forEach(task => {
             const taskEl = createTaskElement(task, 'someday');
             somedayContainer.appendChild(taskEl);
         });
+    }
+
+    // If no tasks, show placeholder
+    if (!tasks['someday'] || tasks['someday'].length === 0) {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'task-placeholder';
+        placeholder.textContent = t('addTask');
+        placeholder.onclick = () => createNewTask('someday', somedayContainer);
+        somedayContainer.appendChild(placeholder);
     }
 }
 

@@ -154,6 +154,9 @@ body {
     transition: all 0.2s ease;
     word-wrap: break-word;
     border: 2px solid transparent;
+    touch-action: pan-y; /* Allow vertical scrolling but enable horizontal swipes */
+    user-select: none; /* Prevent text selection during swipe */
+    -webkit-user-select: none;
 }
 
 .task-text {
@@ -257,39 +260,41 @@ body {
 
 /* Task placeholder for empty days */
 .task-placeholder {
-    padding: 32px 16px;
-    text-align: center;
-    color: #9ca3af;
+    padding: 12px 14px;
+    text-align: left;
+    color: transparent;
     font-size: 14px;
-    cursor: pointer;
-    border: 2px dashed #e5e7eb;
+    cursor: text;
+    border: none;
     border-radius: 8px;
     transition: all 0.2s ease;
     background-color: transparent;
+    min-height: 40px;
 }
 
 .task-placeholder:hover {
-    border-color: #cbd5e1;
-    background-color: rgba(241, 245, 249, 0.3);
-    color: #6b7280;
+    background-color: rgba(241, 245, 249, 0.5);
 }
 
 /* Task input */
 .task-input {
     width: 100%;
     padding: 12px 14px;
-    border: 2px solid #3b82f6;
+    padding-left: 28px;
+    border: none;
     border-radius: 8px;
     font-size: 14px;
     font-family: inherit;
-    background-color: #fff;
+    background-color: #fef3c7;
     resize: none;
     min-height: 60px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .task-input:focus {
     outline: none;
-    border-color: #2563eb;
+    background-color: #fef3c7;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 /* Someday section */

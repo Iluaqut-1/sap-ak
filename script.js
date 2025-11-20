@@ -264,6 +264,19 @@ function createDayColumn(date, dateKey) {
     tasksContainer.className = 'day-tasks';
     tasksContainer.dataset.day = dateKey;
 
+    // Make entire tasks container droppable
+    tasksContainer.addEventListener('dragover', handleDragOver);
+    tasksContainer.addEventListener('drop', (e) => handleDrop(e, dateKey));
+    tasksContainer.addEventListener('dragleave', handleDragLeave);
+
+    // Add task area (now at the top)
+    const addTaskArea = document.createElement('div');
+    addTaskArea.className = 'add-task-area';
+    addTaskArea.onclick = () => createNewTask(dateKey, tasksContainer);
+
+    // Append add task area first
+    tasksContainer.appendChild(addTaskArea);
+
     // Render tasks for this day
     if (tasks[dateKey]) {
         tasks[dateKey].forEach(task => {
@@ -272,19 +285,8 @@ function createDayColumn(date, dateKey) {
         });
     }
 
-    // Add task area
-    const addTaskArea = document.createElement('div');
-    addTaskArea.className = 'add-task-area';
-    addTaskArea.onclick = () => createNewTask(dateKey, tasksContainer);
-
-    // Drag and drop for add task area
-    addTaskArea.addEventListener('dragover', handleDragOver);
-    addTaskArea.addEventListener('drop', (e) => handleDrop(e, dateKey));
-    addTaskArea.addEventListener('dragleave', handleDragLeave);
-
     dayColumn.appendChild(header);
     dayColumn.appendChild(tasksContainer);
-    dayColumn.appendChild(addTaskArea);
 
     return dayColumn;
 }
@@ -433,7 +435,8 @@ function createNewTask(dateKey, container) {
             if (!tasks[dateKey]) {
                 tasks[dateKey] = [];
             }
-            tasks[dateKey].push(task);
+            // Insert at beginning so new tasks appear right after add-task-area
+            tasks[dateKey].unshift(task);
             saveTasksToStorage();
             renderWeek();
         } else {
@@ -875,23 +878,26 @@ function renderSomedayTasks() {
     const somedayContainer = document.getElementById('somedayTasks');
     somedayContainer.innerHTML = '';
 
+    // Make entire someday container droppable
+    somedayContainer.addEventListener('dragover', handleDragOver);
+    somedayContainer.addEventListener('drop', (e) => handleDrop(e, 'someday'));
+    somedayContainer.addEventListener('dragleave', handleDragLeave);
+
+    // Add task area (at the top)
+    const addTaskArea = document.createElement('div');
+    addTaskArea.className = 'add-task-area';
+    addTaskArea.onclick = () => createNewTask('someday', somedayContainer);
+
+    // Append add task area first
+    somedayContainer.appendChild(addTaskArea);
+
+    // Render tasks below
     if (tasks['someday']) {
         tasks['someday'].forEach(task => {
             const taskEl = createTaskElement(task, 'someday');
             somedayContainer.appendChild(taskEl);
         });
     }
-
-    const addTaskArea = document.createElement('div');
-    addTaskArea.className = 'add-task-area';
-    addTaskArea.onclick = () => createNewTask('someday', somedayContainer);
-
-    // Drag and drop
-    addTaskArea.addEventListener('dragover', handleDragOver);
-    addTaskArea.addEventListener('drop', (e) => handleDrop(e, 'someday'));
-    addTaskArea.addEventListener('dragleave', handleDragLeave);
-
-    somedayContainer.appendChild(addTaskArea);
 }
 
 // Week navigation

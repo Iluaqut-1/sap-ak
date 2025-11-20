@@ -249,7 +249,7 @@ body {
 
 /* Add task area */
 .add-task-area {
-    margin-top: 8px;
+    margin-bottom: 8px;
     padding: 0;
     height: 20px;
     text-align: left;

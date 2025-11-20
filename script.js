@@ -288,11 +288,11 @@ function createDayColumn(date, dateKey) {
         });
     }
 
-    // If no tasks, show placeholder
+    // If no tasks, show invisible placeholder for click area
     if (!tasks[dateKey] || tasks[dateKey].length === 0) {
         const placeholder = document.createElement('div');
         placeholder.className = 'task-placeholder';
-        placeholder.textContent = t('addTask');
+        placeholder.textContent = ''; // Empty - no text shown
         placeholder.onclick = () => createNewTask(dateKey, tasksContainer);
         tasksContainer.appendChild(placeholder);
     }
@@ -452,7 +452,7 @@ function createNewTask(dateKey, container) {
 
     const input = document.createElement('textarea');
     input.className = 'task-input';
-    input.placeholder = 'Enter task...';
+    input.placeholder = ''; // No placeholder text
 
     const saveTask = () => {
         const text = input.value.trim();
@@ -925,10 +925,17 @@ function handleTaskDrop(e, targetTask, targetDateKey) {
     renderWeek();
 }
 
-// Touch event handlers for mobile drag and drop
+// Touch event handlers for mobile drag and drop and swipe gestures
 let touchStartData = null;
 let touchDraggedElement = null;
 let ghostElement = null;
+let touchTimeout = null;
+let hasMoved = false;
+let swipeDistance = 0;
+let swipeDirection = null;
+let isSwipeGesture = false;
+const SWIPE_THRESHOLD = 100; // pixels to trigger swipe action
+const SWIPE_VELOCITY_THRESHOLD = 0.3; // minimum horizontal/vertical movement ratio
 
 function handleTouchStart(e, task, dateKey) {
     // Don't interfere with scrolling or other interactions if not pressing directly on the task
@@ -937,82 +944,224 @@ function handleTouchStart(e, task, dateKey) {
         return;
     }
 
+    hasMoved = false;
+    const touch = e.touches[0];
+    const startX = touch.clientX;
+    const startY = touch.clientY;
+
+    // Store the element for potential swipe gestures
+    const element = e.currentTarget;
+    element.dataset.touchStartX = startX;
+    element.dataset.touchStartY = startY;
+
     // Only start drag if touch is held for a moment (long press)
-    const touchTimeout = setTimeout(() => {
-        const touch = e.touches[0];
+    touchTimeout = setTimeout(() => {
+        if (hasMoved) return; // Don't start drag if already moved
+
         draggedTask = { task, dateKey };
-        touchDraggedElement = e.currentTarget;
+        touchDraggedElement = element;
         touchStartData = {
-            startX: touch.clientX,
-            startY: touch.clientY,
-            offsetX: touch.clientX - e.currentTarget.getBoundingClientRect().left,
-            offsetY: touch.clientY - e.currentTarget.getBoundingClientRect().top
+            startX: startX,
+            startY: startY,
+            offsetX: startX - element.getBoundingClientRect().left,
+            offsetY: startY - element.getBoundingClientRect().top
         };
 
-        // Haptic feedback on drag start
+        // Haptic feedback on drag start (stronger vibration)
         if (navigator.vibrate) {
-            navigator.vibrate(50);
+            navigator.vibrate([50, 30, 50]); // Pattern for better feedback
         }
 
         // Create ghost element
-        ghostElement = e.currentTarget.cloneNode(true);
+        ghostElement = element.cloneNode(true);
         ghostElement.style.position = 'fixed';
         ghostElement.style.zIndex = '10000';
         ghostElement.style.pointerEvents = 'none';
         ghostElement.style.opacity = '0.8';
-        ghostElement.style.width = e.currentTarget.offsetWidth + 'px';
-        ghostElement.style.left = (touch.clientX - touchStartData.offsetX) + 'px';
-        ghostElement.style.top = (touch.clientY - touchStartData.offsetY) + 'px';
+        ghostElement.style.width = element.offsetWidth + 'px';
+        ghostElement.style.left = (startX - touchStartData.offsetX) + 'px';
+        ghostElement.style.top = (startY - touchStartData.offsetY) + 'px';
+        ghostElement.style.transform = 'scale(1.05)';
+        ghostElement.style.transition = 'transform 0.2s';
         document.body.appendChild(ghostElement);
 
-        e.currentTarget.classList.add('dragging');
-    }, 300); // 300ms long press
-
-    e.currentTarget.addEventListener('touchend', () => {
-        clearTimeout(touchTimeout);
-    }, { once: true });
-
-    e.currentTarget.addEventListener('touchmove', () => {
-        clearTimeout(touchTimeout);
-    }, { once: true });
+        element.classList.add('dragging');
+    }, 200); // 200ms long press (reduced for better responsiveness)
 }
 
 function handleTouchMove(e) {
-    if (!touchDraggedElement || !ghostElement) return;
-
-    e.preventDefault(); // Prevent scrolling while dragging
     const touch = e.touches[0];
+    hasMoved = true;
 
-    // Move ghost element
-    ghostElement.style.left = (touch.clientX - touchStartData.offsetX) + 'px';
-    ghostElement.style.top = (touch.clientY - touchStartData.offsetY) + 'px';
+    // If we're dragging, handle the drag
+    if (touchDraggedElement && ghostElement) {
+        e.preventDefault(); // Prevent scrolling while dragging
 
-    // Find element under touch
-    ghostElement.style.pointerEvents = 'none';
-    const elementUnderTouch = document.elementFromPoint(touch.clientX, touch.clientY);
-    ghostElement.style.pointerEvents = 'none';
+        // Move ghost element
+        ghostElement.style.left = (touch.clientX - touchStartData.offsetX) + 'px';
+        ghostElement.style.top = (touch.clientY - touchStartData.offsetY) + 'px';
 
-    // Remove all drag-over classes
-    document.querySelectorAll('.drag-over, .drag-over-task').forEach(el => {
-        el.classList.remove('drag-over', 'drag-over-task');
-    });
+        // Find element under touch
+        ghostElement.style.pointerEvents = 'none';
+        const elementUnderTouch = document.elementFromPoint(touch.clientX, touch.clientY);
+        ghostElement.style.pointerEvents = 'none';
 
-    // Add drag-over class to valid drop targets
-    if (elementUnderTouch) {
-        const dayTasks = elementUnderTouch.closest('.day-tasks');
-        if (dayTasks) {
-            dayTasks.classList.add('drag-over');
+        // Remove all drag-over classes
+        document.querySelectorAll('.drag-over, .drag-over-task').forEach(el => {
+            el.classList.remove('drag-over', 'drag-over-task');
+        });
+
+        // Add drag-over class to valid drop targets
+        if (elementUnderTouch) {
+            const dayTasks = elementUnderTouch.closest('.day-tasks');
+            if (dayTasks) {
+                dayTasks.classList.add('drag-over');
+            }
+
+            const taskItem = elementUnderTouch.closest('.task-item');
+            if (taskItem && taskItem !== touchDraggedElement) {
+                taskItem.classList.add('drag-over-task');
+            }
+        }
+    } else {
+        // Clear the long-press timeout if we're moving without a drag started
+        if (touchTimeout) {
+            clearTimeout(touchTimeout);
+            touchTimeout = null;
         }
 
-        const taskItem = elementUnderTouch.closest('.task-item');
-        if (taskItem && taskItem !== touchDraggedElement) {
-            taskItem.classList.add('drag-over-task');
+        // Check for swipe gesture
+        const taskItem = e.currentTarget;
+        if (taskItem && taskItem.dataset.touchStartX) {
+            const deltaX = touch.clientX - parseFloat(taskItem.dataset.touchStartX);
+            const deltaY = touch.clientY - parseFloat(taskItem.dataset.touchStartY);
+
+            // Determine if this is a horizontal swipe (more horizontal than vertical)
+            const isHorizontalSwipe = Math.abs(deltaX) > Math.abs(deltaY) * (1 / SWIPE_VELOCITY_THRESHOLD);
+
+            if (isHorizontalSwipe && Math.abs(deltaX) > 10) {
+                isSwipeGesture = true;
+                e.preventDefault(); // Prevent scrolling during swipe
+
+                swipeDistance = deltaX;
+                swipeDirection = deltaX > 0 ? 'right' : 'left';
+
+                // Apply visual feedback
+                taskItem.style.transform = `translateX(${deltaX}px)`;
+                taskItem.style.transition = 'none';
+
+                // Change opacity based on swipe distance
+                const progress = Math.min(Math.abs(deltaX) / SWIPE_THRESHOLD, 1);
+
+                if (swipeDirection === 'left') {
+                    // Swipe left - red background for delete
+                    taskItem.style.backgroundColor = `rgba(239, 68, 68, ${progress * 0.7})`;
+                } else {
+                    // Swipe right - green background for complete
+                    taskItem.style.backgroundColor = `rgba(34, 197, 94, ${progress * 0.7})`;
+                }
+
+                // Haptic feedback when threshold is reached
+                if (Math.abs(deltaX) >= SWIPE_THRESHOLD && !taskItem.dataset.swipeThresholdReached) {
+                    if (navigator.vibrate) {
+                        navigator.vibrate(40);
+                    }
+                    taskItem.dataset.swipeThresholdReached = 'true';
+                }
+            }
         }
     }
 }
 
 function handleTouchEnd(e, targetDateKey) {
+    // Clear the long-press timeout
+    if (touchTimeout) {
+        clearTimeout(touchTimeout);
+        touchTimeout = null;
+    }
+
+    const taskItem = e.currentTarget;
+
+    // Handle swipe gesture
+    if (isSwipeGesture && taskItem && Math.abs(swipeDistance) >= SWIPE_THRESHOLD) {
+        const taskId = taskItem.dataset.taskId;
+        const tasks_dateKey = taskItem.closest('.day-tasks')?.dataset.day;
+
+        if (taskId && tasks_dateKey) {
+            const task = tasks[tasks_dateKey]?.find(t => t.id === taskId);
+
+            if (task) {
+                if (swipeDirection === 'left') {
+                    // Swipe left - delete task
+                    if (navigator.vibrate) {
+                        navigator.vibrate([30, 10, 30]);
+                    }
+
+                    // Animate out
+                    taskItem.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+                    taskItem.style.transform = 'translateX(-100%)';
+                    taskItem.style.opacity = '0';
+
+                    setTimeout(() => {
+                        tasks[tasks_dateKey] = tasks[tasks_dateKey].filter(t => t.id !== taskId);
+                        if (tasks[tasks_dateKey].length === 0 && tasks_dateKey !== 'someday') {
+                            delete tasks[tasks_dateKey];
+                        }
+                        saveTasksToStorage();
+                        renderWeek();
+                    }, 300);
+                } else if (swipeDirection === 'right') {
+                    // Swipe right - mark complete/incomplete
+                    if (navigator.vibrate) {
+                        navigator.vibrate([30, 10, 30]);
+                    }
+
+                    task.completed = !task.completed;
+                    saveTasksToStorage();
+
+                    // Reset position with animation
+                    taskItem.style.transition = 'transform 0.3s ease, background-color 0.3s ease';
+                    taskItem.style.transform = 'translateX(0)';
+                    renderWeek();
+                }
+            }
+        }
+
+        // Reset swipe state
+        isSwipeGesture = false;
+        swipeDistance = 0;
+        swipeDirection = null;
+        if (taskItem) {
+            delete taskItem.dataset.swipeThresholdReached;
+            delete taskItem.dataset.touchStartX;
+            delete taskItem.dataset.touchStartY;
+        }
+        hasMoved = false;
+        return;
+    }
+
+    // Reset swipe visual feedback if threshold not reached
+    if (isSwipeGesture && taskItem) {
+        taskItem.style.transition = 'transform 0.3s ease, background-color 0.3s ease';
+        taskItem.style.transform = 'translateX(0)';
+        taskItem.style.backgroundColor = '';
+
+        setTimeout(() => {
+            taskItem.style.transition = '';
+        }, 300);
+
+        isSwipeGesture = false;
+        swipeDistance = 0;
+        swipeDirection = null;
+        delete taskItem.dataset.swipeThresholdReached;
+        delete taskItem.dataset.touchStartX;
+        delete taskItem.dataset.touchStartY;
+        hasMoved = false;
+        return;
+    }
+
     if (!touchDraggedElement || !draggedTask) {
+        hasMoved = false;
         return;
     }
 
@@ -1083,9 +1232,9 @@ function handleTouchEnd(e, targetDateKey) {
                     tasks[targetTaskDateKey].splice(insertIndex, 0, draggedTaskData);
                 }
 
-                // Haptic feedback on drop
+                // Haptic feedback on drop (double tap pattern)
                 if (navigator.vibrate) {
-                    navigator.vibrate(50);
+                    navigator.vibrate([30, 20, 30]);
                 }
 
                 saveTasksToStorage();
@@ -1108,9 +1257,9 @@ function handleTouchEnd(e, targetDateKey) {
                 }
                 tasks[dropDateKey].push(task);
 
-                // Haptic feedback on drop
+                // Haptic feedback on drop (double tap pattern)
                 if (navigator.vibrate) {
-                    navigator.vibrate(50);
+                    navigator.vibrate([30, 20, 30]);
                 }
 
                 saveTasksToStorage();
@@ -1123,6 +1272,7 @@ function handleTouchEnd(e, targetDateKey) {
     touchDraggedElement = null;
     draggedTask = null;
     touchStartData = null;
+    hasMoved = false;
 }
 
 // Someday section
@@ -1154,11 +1304,11 @@ function renderSomedayTasks() {
         });
     }
 
-    // If no tasks, show placeholder
+    // If no tasks, show invisible placeholder for click area
     if (!tasks['someday'] || tasks['someday'].length === 0) {
         const placeholder = document.createElement('div');
         placeholder.className = 'task-placeholder';
-        placeholder.textContent = t('addTask');
+        placeholder.textContent = ''; // Empty - no text shown
         placeholder.onclick = () => createNewTask('someday', somedayContainer);
         somedayContainer.appendChild(placeholder);
     }

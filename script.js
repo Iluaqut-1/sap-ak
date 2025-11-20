@@ -763,7 +763,7 @@ function handleDragStart(e, task, dateKey) {
 
     // Haptic feedback on drag start
     if (navigator.vibrate) {
-        navigator.vibrate(50);
+        navigator.vibrate([100, 50, 100]); // Strong pattern for drag start
     }
 }
 
@@ -818,7 +818,7 @@ function handleDrop(e, targetDateKey) {
 
         // Haptic feedback on drop
         if (navigator.vibrate) {
-            navigator.vibrate(50);
+            navigator.vibrate([70, 30, 70]); // Double tap pattern for drop
         }
 
         saveTasksToStorage();
@@ -918,7 +918,7 @@ function handleTaskDrop(e, targetTask, targetDateKey) {
 
     // Haptic feedback on drop
     if (navigator.vibrate) {
-        navigator.vibrate(50);
+        navigator.vibrate([70, 30, 70]); // Double tap pattern for drop
     }
 
     saveTasksToStorage();
@@ -967,9 +967,9 @@ function handleTouchStart(e, task, dateKey) {
             offsetY: startY - element.getBoundingClientRect().top
         };
 
-        // Haptic feedback on drag start (stronger vibration)
+        // Haptic feedback on drag start (stronger vibration pattern)
         if (navigator.vibrate) {
-            navigator.vibrate([50, 30, 50]); // Pattern for better feedback
+            navigator.vibrate([100, 50, 100]); // Stronger pattern: vibrate 100ms, pause 50ms, vibrate 100ms
         }
 
         // Create ghost element
@@ -985,7 +985,10 @@ function handleTouchStart(e, task, dateKey) {
         ghostElement.style.transition = 'transform 0.2s';
         document.body.appendChild(ghostElement);
 
+        // Hide the original element to prevent "frozen" snapshot effect
         element.classList.add('dragging');
+        element.style.opacity = '0';
+        element.style.visibility = 'hidden';
     }, 200); // 200ms long press (reduced for better responsiveness)
 }
 
@@ -1136,6 +1139,20 @@ function handleTouchEnd(e, targetDateKey) {
             delete taskItem.dataset.touchStartX;
             delete taskItem.dataset.touchStartY;
         }
+
+        // Clean up any drag state
+        if (touchDraggedElement) {
+            touchDraggedElement.classList.remove('dragging');
+            touchDraggedElement.style.opacity = '';
+            touchDraggedElement.style.visibility = '';
+            touchDraggedElement = null;
+        }
+        if (ghostElement) {
+            ghostElement.remove();
+            ghostElement = null;
+        }
+        draggedTask = null;
+
         hasMoved = false;
         return;
     }
@@ -1156,6 +1173,20 @@ function handleTouchEnd(e, targetDateKey) {
         delete taskItem.dataset.swipeThresholdReached;
         delete taskItem.dataset.touchStartX;
         delete taskItem.dataset.touchStartY;
+
+        // Clean up any drag state
+        if (touchDraggedElement) {
+            touchDraggedElement.classList.remove('dragging');
+            touchDraggedElement.style.opacity = '';
+            touchDraggedElement.style.visibility = '';
+            touchDraggedElement = null;
+        }
+        if (ghostElement) {
+            ghostElement.remove();
+            ghostElement = null;
+        }
+        draggedTask = null;
+
         hasMoved = false;
         return;
     }
@@ -1176,8 +1207,10 @@ function handleTouchEnd(e, targetDateKey) {
         ghostElement = null;
     }
 
-    // Remove dragging class
+    // Remove dragging class and restore visibility
     touchDraggedElement.classList.remove('dragging');
+    touchDraggedElement.style.opacity = '';
+    touchDraggedElement.style.visibility = '';
 
     // Remove drag-over classes
     document.querySelectorAll('.drag-over, .drag-over-task').forEach(el => {
@@ -1234,7 +1267,7 @@ function handleTouchEnd(e, targetDateKey) {
 
                 // Haptic feedback on drop (double tap pattern)
                 if (navigator.vibrate) {
-                    navigator.vibrate([30, 20, 30]);
+                    navigator.vibrate([70, 30, 70]); // Stronger drop feedback
                 }
 
                 saveTasksToStorage();
@@ -1259,7 +1292,7 @@ function handleTouchEnd(e, targetDateKey) {
 
                 // Haptic feedback on drop (double tap pattern)
                 if (navigator.vibrate) {
-                    navigator.vibrate([30, 20, 30]);
+                    navigator.vibrate([70, 30, 70]); // Stronger drop feedback
                 }
 
                 saveTasksToStorage();

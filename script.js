@@ -4,6 +4,7 @@ let tasks = {};
 let currentEditingTask = null;
 let draggedTask = null;
 let currentLanguage = 'en';
+let taskPopoverState = { taskId: null, dateKey: null, position: null };
 
 // Internationalization
 const translations = {
@@ -205,11 +206,31 @@ function renderWeek() {
     // Clear and render week
     weekContainer.innerHTML = '';
 
-    weekDates.forEach(date => {
+    // Render Monday to Friday (indices 0-4)
+    for (let i = 0; i < 5; i++) {
+        const date = weekDates[i];
         const dateKey = formatDate(date);
         const dayColumn = createDayColumn(date, dateKey);
         weekContainer.appendChild(dayColumn);
-    });
+    }
+
+    // Create weekend container for Saturday and Sunday
+    const weekendContainer = document.createElement('div');
+    weekendContainer.className = 'weekend-container';
+
+    // Render Saturday (index 5)
+    const satDate = weekDates[5];
+    const satDateKey = formatDate(satDate);
+    const satColumn = createDayColumn(satDate, satDateKey);
+    weekendContainer.appendChild(satColumn);
+
+    // Render Sunday (index 6)
+    const sunDate = weekDates[6];
+    const sunDateKey = formatDate(sunDate);
+    const sunColumn = createDayColumn(sunDate, sunDateKey);
+    weekendContainer.appendChild(sunColumn);
+
+    weekContainer.appendChild(weekendContainer);
 
     // Render someday tasks
     renderSomedayTasks();
@@ -271,10 +292,31 @@ function createDayColumn(date, dateKey) {
 function createTaskElement(task, dateKey) {
     const taskEl = document.createElement('div');
     taskEl.className = `task-item${task.completed ? ' completed' : ''}`;
-    taskEl.textContent = task.text;
     taskEl.dataset.taskId = task.id;
     taskEl.dataset.color = task.color || 'default';
     taskEl.setAttribute('draggable', 'true');
+
+    // Task text content
+    const taskText = document.createElement('span');
+    taskText.className = 'task-text';
+    taskText.innerHTML = formatTaskText(task.text);
+    taskEl.appendChild(taskText);
+
+    // Clone icon
+    const cloneIcon = document.createElement('span');
+    cloneIcon.className = 'clone-icon';
+    cloneIcon.innerHTML = '⋮⋮';
+    cloneIcon.title = 'Drag to copy';
+    taskEl.appendChild(cloneIcon);
+
+    // Complete overlay (underline effect on hover)
+    const completeOverlay = document.createElement('div');
+    completeOverlay.className = 'task-complete-overlay';
+    completeOverlay.onclick = (e) => {
+        e.stopPropagation();
+        toggleTaskComplete(task.id, dateKey);
+    };
+    taskEl.appendChild(completeOverlay);
 
     // Actions
     const actions = document.createElement('div');
@@ -312,10 +354,10 @@ function createTaskElement(task, dateKey) {
     actions.appendChild(deleteBtn);
     taskEl.appendChild(actions);
 
-    // Edit on click
+    // Edit on click - open popover instead of inline editing
     taskEl.onclick = (e) => {
-        if (e.target === taskEl) {
-            editTask(task.id, dateKey, taskEl);
+        if (e.target === taskEl || e.target === taskText) {
+            openTaskPopover(task.id, dateKey, e.currentTarget);
         }
     };
 
@@ -324,6 +366,47 @@ function createTaskElement(task, dateKey) {
     taskEl.addEventListener('dragend', handleDragEnd);
 
     return taskEl;
+}
+
+// Format task text with basic markdown-like formatting
+function formatTaskText(text) {
+    if (!text) return '';
+
+    // Support for bold (**text**)
+    text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+    // Support for italic (*text*)
+    text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
+
+    // Support for links [text](url)
+    text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" onclick="event.stopPropagation()">$1</a>');
+
+    // Support for bullet lists (lines starting with -)
+    const lines = text.split('\n');
+    let inList = false;
+    let result = [];
+
+    lines.forEach(line => {
+        if (line.trim().startsWith('-')) {
+            if (!inList) {
+                result.push('<ul style="margin: 4px 0; padding-left: 20px;">');
+                inList = true;
+            }
+            result.push(`<li>${line.trim().substring(1).trim()}</li>`);
+        } else {
+            if (inList) {
+                result.push('</ul>');
+                inList = false;
+            }
+            result.push(line);
+        }
+    });
+
+    if (inList) {
+        result.push('</ul>');
+    }
+
+    return result.join('<br>');
 }
 
 // Create new task
@@ -367,39 +450,171 @@ function createNewTask(dateKey, container) {
     input.focus();
 }
 
-// Edit task
-function editTask(taskId, dateKey, taskEl) {
-    const task = tasks[dateKey].find(t => t.id === taskId);
+// Open task popover editor
+function openTaskPopover(taskId, dateKey, taskElement) {
+    const task = tasks[dateKey]?.find(t => t.id === taskId);
     if (!task) return;
 
-    const input = document.createElement('textarea');
-    input.className = 'task-input';
-    input.value = task.text;
+    taskPopoverState = { taskId, dateKey, taskElement };
 
-    const saveEdit = () => {
-        const text = input.value.trim();
-        if (text) {
-            task.text = text;
-            saveTasksToStorage();
-            renderWeek();
-        } else {
-            renderWeek();
+    const popover = document.getElementById('taskPopover');
+    const textarea = document.getElementById('taskEditorTextarea');
+
+    // Set textarea value
+    textarea.value = task.text;
+
+    // Position popover near the task
+    const rect = taskElement.getBoundingClientRect();
+    const popoverWidth = 400;
+    const popoverHeight = 350;
+
+    let left = rect.right + 10;
+    let top = rect.top;
+
+    // Adjust if popover goes off screen
+    if (left + popoverWidth > window.innerWidth) {
+        left = rect.left - popoverWidth - 10;
+    }
+
+    if (top + popoverHeight > window.innerHeight) {
+        top = window.innerHeight - popoverHeight - 20;
+    }
+
+    if (left < 10) {
+        left = 10;
+    }
+
+    if (top < 10) {
+        top = 10;
+    }
+
+    popover.style.left = `${left}px`;
+    popover.style.top = `${top}px`;
+    popover.classList.add('active');
+
+    // Focus textarea
+    textarea.focus();
+    textarea.select();
+}
+
+// Close task popover
+function closeTaskPopover() {
+    const popover = document.getElementById('taskPopover');
+    const textarea = document.getElementById('taskEditorTextarea');
+
+    // Save changes
+    if (taskPopoverState.taskId && taskPopoverState.dateKey) {
+        const task = tasks[taskPopoverState.dateKey]?.find(t => t.id === taskPopoverState.taskId);
+        if (task) {
+            const newText = textarea.value.trim();
+            if (newText) {
+                task.text = newText;
+                saveTasksToStorage();
+                renderWeek();
+            }
         }
-    };
+    }
 
-    input.onblur = saveEdit;
-    input.onkeydown = (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            saveEdit();
-        } else if (e.key === 'Escape') {
-            renderWeek();
-        }
-    };
+    popover.classList.remove('active');
+    taskPopoverState = { taskId: null, dateKey: null, taskElement: null };
+}
 
-    taskEl.replaceWith(input);
-    input.focus();
-    input.select();
+// Apply text formatting in popover
+function applyTextFormatting(format) {
+    const textarea = document.getElementById('taskEditorTextarea');
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = textarea.value.substring(start, end);
+    const beforeText = textarea.value.substring(0, start);
+    const afterText = textarea.value.substring(end);
+
+    let newText = '';
+    let cursorOffset = 0;
+
+    switch (format) {
+        case 'bold':
+            newText = `${beforeText}**${selectedText}**${afterText}`;
+            cursorOffset = selectedText ? 2 : 2;
+            break;
+        case 'italic':
+            newText = `${beforeText}*${selectedText}*${afterText}`;
+            cursorOffset = selectedText ? 1 : 1;
+            break;
+        case 'list':
+            if (selectedText) {
+                const lines = selectedText.split('\n');
+                const bulletedLines = lines.map(line => line.trim() ? `- ${line}` : line).join('\n');
+                newText = `${beforeText}${bulletedLines}${afterText}`;
+                cursorOffset = 2;
+            } else {
+                newText = `${beforeText}- ${afterText}`;
+                cursorOffset = 2;
+            }
+            break;
+        case 'link':
+            const url = prompt('Enter URL:');
+            if (url) {
+                const linkText = selectedText || 'Link';
+                newText = `${beforeText}[${linkText}](${url})${afterText}`;
+                cursorOffset = selectedText ? 0 : linkText.length + url.length + 4;
+            } else {
+                return;
+            }
+            break;
+    }
+
+    textarea.value = newText;
+    textarea.focus();
+
+    if (format === 'bold' || format === 'italic') {
+        textarea.setSelectionRange(start + cursorOffset, end + cursorOffset);
+    } else {
+        textarea.setSelectionRange(start + cursorOffset, start + cursorOffset);
+    }
+}
+
+// Move task to different date
+function moveTask(action) {
+    if (!taskPopoverState.taskId || !taskPopoverState.dateKey) return;
+
+    const task = tasks[taskPopoverState.dateKey]?.find(t => t.id === taskPopoverState.taskId);
+    if (!task) return;
+
+    let targetDateKey = null;
+
+    switch (action) {
+        case 'tomorrow':
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            targetDateKey = formatDate(tomorrow);
+            break;
+        case 'nextweek':
+            const nextWeek = new Date();
+            nextWeek.setDate(nextWeek.getDate() + 7);
+            targetDateKey = formatDate(nextWeek);
+            break;
+        case 'someday':
+            targetDateKey = 'someday';
+            break;
+    }
+
+    if (!targetDateKey) return;
+
+    // Remove from source
+    tasks[taskPopoverState.dateKey] = tasks[taskPopoverState.dateKey].filter(t => t.id !== task.id);
+    if (tasks[taskPopoverState.dateKey].length === 0 && taskPopoverState.dateKey !== 'someday') {
+        delete tasks[taskPopoverState.dateKey];
+    }
+
+    // Add to target
+    if (!tasks[targetDateKey]) {
+        tasks[targetDateKey] = [];
+    }
+    tasks[targetDateKey].push(task);
+
+    saveTasksToStorage();
+    closeTaskPopover();
+    renderWeek();
 }
 
 // Delete task
@@ -613,6 +828,30 @@ function setupEventListeners() {
         });
     });
 
+    // Task popover
+    document.getElementById('closeTaskPopover').addEventListener('click', closeTaskPopover);
+    document.getElementById('taskPopover').addEventListener('click', (e) => {
+        if (e.target.id === 'taskPopover') {
+            closeTaskPopover();
+        }
+    });
+
+    // Toolbar buttons
+    document.querySelectorAll('.toolbar-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const format = btn.dataset.format;
+            applyTextFormatting(format);
+        });
+    });
+
+    // Move task buttons
+    document.querySelectorAll('.move-menu-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const action = btn.dataset.move;
+            moveTask(action);
+        });
+    });
+
     // Menu
     document.getElementById('menuBtn').addEventListener('click', (e) => {
         e.stopPropagation();
@@ -631,8 +870,15 @@ function setupEventListeners() {
     document.addEventListener('click', (e) => {
         const menu = document.getElementById('menuDropdown');
         const menuBtn = document.getElementById('menuBtn');
+        const popover = document.getElementById('taskPopover');
         if (!menu.contains(e.target) && !menuBtn.contains(e.target)) {
             closeMenu();
+        }
+        // Close popover when clicking outside
+        if (!popover.contains(e.target) && !e.target.closest('.task-item')) {
+            if (popover.classList.contains('active')) {
+                closeTaskPopover();
+            }
         }
     });
 
@@ -650,6 +896,7 @@ function setupEventListeners() {
             closeColorPicker();
             closeSupportModal();
             closeMenu();
+            closeTaskPopover();
         }
     });
 }

@@ -80,11 +80,18 @@ body {
 /* Week container */
 .week-container {
     display: grid;
-    grid-template-columns: repeat(7, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     gap: 1px;
     background-color: #e5e7eb;
     border: 1px solid #e5e7eb;
     margin-bottom: 40px;
+}
+
+.weekend-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background-color: #e5e7eb;
 }
 
 .day-column {
@@ -131,6 +138,7 @@ body {
     background-color: #fef3c7;
     border-radius: 8px;
     padding: 12px 14px;
+    padding-left: 28px;
     font-size: 14px;
     line-height: 1.5;
     cursor: pointer;
@@ -138,6 +146,20 @@ body {
     transition: all 0.2s ease;
     word-wrap: break-word;
     border: 2px solid transparent;
+}
+
+.task-text {
+    display: block;
+    word-break: break-word;
+}
+
+.task-text a {
+    color: #3b82f6;
+    text-decoration: underline;
+}
+
+.task-text a:hover {
+    color: #2563eb;
 }
 
 .task-item:hover {
@@ -223,25 +245,30 @@ body {
 /* Add task area */
 .add-task-area {
     margin-top: 8px;
-    padding: 12px;
-    border-radius: 8px;
-    border: 2px dashed #d1d5db;
+    padding: 8px 12px;
     text-align: center;
     color: #9ca3af;
     cursor: pointer;
     transition: all 0.2s ease;
     font-size: 14px;
+    border: none;
+    background: transparent;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+    text-decoration-color: #d1d5db;
 }
 
 .add-task-area:hover {
-    border-color: #9ca3af;
-    background-color: #f9fafb;
+    color: #6b7280;
+    text-decoration-color: #9ca3af;
 }
 
 .add-task-area.drag-over {
     background-color: #dbeafe;
-    border-color: #3b82f6;
+    border-radius: 8px;
+    padding: 12px;
     color: #3b82f6;
+    text-decoration: none;
 }
 
 /* Task input */
@@ -662,11 +689,196 @@ body {
     }
 }
 
+/* Task popover editor */
+.task-popover {
+    display: none;
+    position: fixed;
+    background-color: #fff;
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    min-width: 400px;
+    max-width: 500px;
+}
+
+.task-popover.active {
+    display: block;
+}
+
+.task-popover-header {
+    padding: 16px;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.task-popover-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.task-popover-close {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+}
+
+.task-popover-close:hover {
+    background-color: #f3f4f6;
+}
+
+.task-popover-body {
+    padding: 16px;
+}
+
+.task-editor-textarea {
+    width: 100%;
+    min-height: 120px;
+    padding: 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    resize: vertical;
+    margin-bottom: 12px;
+}
+
+.task-editor-textarea:focus {
+    outline: none;
+    border-color: #818cf8;
+}
+
+.task-editor-toolbar {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.toolbar-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    border: 1px solid #e5e7eb;
+    background: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    font-size: 16px;
+}
+
+.toolbar-btn:hover {
+    background-color: #f3f4f6;
+    border-color: #d1d5db;
+}
+
+.toolbar-btn.active {
+    background-color: #818cf8;
+    border-color: #818cf8;
+    color: white;
+}
+
+.task-move-menu {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.move-menu-btn {
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+    border-radius: 6px;
+    font-size: 14px;
+    color: #1f2937;
+    transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.move-menu-btn:hover {
+    background-color: #f3f4f6;
+}
+
+.move-menu-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* Task hover effects */
+.task-item:hover .task-complete-overlay {
+    opacity: 1;
+}
+
+.task-complete-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(to right, #10b981 0%, #10b981 100%);
+    opacity: 0;
+    transition: all 0.2s;
+    border-radius: 0 0 6px 6px;
+    cursor: pointer;
+}
+
+.task-complete-overlay:hover {
+    height: 6px;
+    background: linear-gradient(to right, #059669 0%, #059669 100%);
+}
+
+.task-item.completed .task-complete-overlay {
+    opacity: 1;
+    background: linear-gradient(to right, #6b7280 0%, #6b7280 100%);
+}
+
+.task-item.completed .task-complete-overlay:hover {
+    background: linear-gradient(to right, #9ca3af 0%, #9ca3af 100%);
+}
+
+.clone-icon {
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    opacity: 0;
+    font-size: 16px;
+    transition: opacity 0.2s;
+    cursor: grab;
+}
+
+.task-item:hover .clone-icon {
+    opacity: 0.5;
+}
+
+.clone-icon:hover {
+    opacity: 1 !important;
+}
+
 /* Print styles */
 @media print {
     .header-actions,
     .add-task-area,
-    .task-actions {
+    .task-actions,
+    .clone-icon,
+    .task-popover {
         display: none !important;
     }
 

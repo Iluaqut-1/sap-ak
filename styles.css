@@ -277,6 +277,194 @@ body {
     margin-bottom: 16px;
 }
 
+/* Menu dropdown */
+.menu-dropdown {
+    position: absolute;
+    top: 80px;
+    right: 20px;
+    background-color: #fff;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    min-width: 200px;
+    z-index: 900;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: all 0.2s ease;
+}
+
+.menu-dropdown.active {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.menu-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border: none;
+    background: none;
+    width: 100%;
+    cursor: pointer;
+    font-size: 14px;
+    color: #1f2937;
+    transition: background-color 0.2s ease;
+    text-align: left;
+}
+
+.menu-item:first-child {
+    border-radius: 12px 12px 0 0;
+}
+
+.menu-item:last-child {
+    border-radius: 0 0 12px 12px;
+}
+
+.menu-item:hover {
+    background-color: #f3f4f6;
+}
+
+.menu-item svg {
+    flex-shrink: 0;
+}
+
+.menu-divider {
+    height: 1px;
+    background-color: #e5e7eb;
+    margin: 4px 0;
+}
+
+.language-selector {
+    cursor: default;
+}
+
+.language-selector:hover {
+    background-color: transparent;
+}
+
+.language-select {
+    flex: 1;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 14px;
+    background-color: #fff;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.language-select:focus {
+    outline: none;
+    border-color: #a78bfa;
+}
+
+/* Support modal */
+.support-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.4);
+    z-index: 1100;
+    align-items: center;
+    justify-content: center;
+}
+
+.support-modal.active {
+    display: flex;
+}
+
+.support-content {
+    background-color: #fff;
+    border-radius: 16px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.support-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px 28px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.support-header h2 {
+    font-size: 24px;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.close-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background-color: #f3f4f6;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.close-btn:hover {
+    background-color: #e5e7eb;
+    transform: scale(1.05);
+}
+
+.support-body {
+    padding: 24px 28px;
+}
+
+.support-body h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #1f2937;
+    margin-top: 20px;
+    margin-bottom: 12px;
+}
+
+.support-body h3:first-child {
+    margin-top: 0;
+}
+
+.support-body ul {
+    list-style: none;
+    padding-left: 0;
+}
+
+.support-body li {
+    padding: 8px 0;
+    color: #4b5563;
+    line-height: 1.6;
+}
+
+.support-body li::before {
+    content: "•";
+    color: #a78bfa;
+    font-weight: bold;
+    display: inline-block;
+    width: 1em;
+    margin-right: 8px;
+}
+
+.support-body kbd {
+    background-color: #f3f4f6;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-family: monospace;
+    font-size: 12px;
+}
+
 /* Color picker modal */
 .color-picker-modal {
     display: none;
@@ -322,6 +510,20 @@ body {
     border-color: #1f2937;
 }
 
+/* Weekend compact view */
+.day-column.weekend {
+    background-color: #fafafa;
+}
+
+.day-column.weekend .day-header {
+    padding-bottom: 8px;
+}
+
+.day-column.weekend {
+    min-height: 300px;
+    padding: 12px;
+}
+
 /* Responsive design for tablets */
 @media (max-width: 1024px) {
     .week-container {
@@ -330,6 +532,12 @@ body {
 
     .current-month-year {
         font-size: 24px;
+    }
+
+    /* Weekend stacking for tablet */
+    .day-column.weekend {
+        min-height: 250px;
+        padding: 10px;
     }
 }
 
@@ -398,6 +606,26 @@ body {
         width: 40px;
         height: 40px;
     }
+
+    /* Weekend compact for mobile */
+    .day-column.weekend {
+        min-height: 200px;
+        padding: 10px;
+    }
+
+    .day-column.weekend .day-date {
+        font-size: 16px;
+    }
+
+    .day-column.weekend .day-name {
+        font-size: 11px;
+    }
+
+    /* Menu dropdown positioning for mobile */
+    .menu-dropdown {
+        right: 12px;
+        top: 70px;
+    }
 }
 
 /* Very small screens */
@@ -417,6 +645,12 @@ body {
     .color-option {
         width: 45px;
         height: 45px;
+    }
+
+    /* Even more compact weekend for very small screens */
+    .day-column.weekend {
+        min-height: 180px;
+        padding: 8px;
     }
 }
 

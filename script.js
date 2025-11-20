@@ -3,10 +3,149 @@ let currentWeekOffset = 0;
 let tasks = {};
 let currentEditingTask = null;
 let draggedTask = null;
+let currentLanguage = 'en';
+
+// Internationalization
+const translations = {
+    en: {
+        'menu.print': 'Print',
+        'menu.share': 'Share',
+        'menu.support': 'Support',
+        'support.title': 'Support',
+        'support.howToUse': 'How to use',
+        'support.instruction1': 'Click on any day to add a task',
+        'support.instruction2': 'Hover over tasks to see actions (complete, color, delete)',
+        'support.instruction3': 'Drag and drop tasks to move them between days',
+        'support.instruction4': 'Click on a task to edit it',
+        'support.instruction5': 'Use the arrows to navigate between weeks',
+        'support.shortcuts': 'Keyboard shortcuts',
+        'support.escAction': 'Close modals',
+        'support.enterAction': 'Save task',
+        'someday': 'Someday',
+        'addTask': '+ Add task',
+        'deleteConfirm': 'Delete this task?',
+        'days': {
+            'Sun': 'Sun',
+            'Mon': 'Mon',
+            'Tue': 'Tue',
+            'Wed': 'Wed',
+            'Thu': 'Thu',
+            'Fri': 'Fri',
+            'Sat': 'Sat'
+        },
+        'months': ['January', 'February', 'March', 'April', 'May', 'June',
+                   'July', 'August', 'September', 'October', 'November', 'December']
+    },
+    da: {
+        'menu.print': 'Udskriv',
+        'menu.share': 'Del',
+        'menu.support': 'Hjælp',
+        'support.title': 'Hjælp',
+        'support.howToUse': 'Sådan bruges',
+        'support.instruction1': 'Klik på en dag for at tilføje en opgave',
+        'support.instruction2': 'Hold musen over opgaver for at se handlinger (fuldført, farve, slet)',
+        'support.instruction3': 'Træk og slip opgaver for at flytte dem mellem dage',
+        'support.instruction4': 'Klik på en opgave for at redigere den',
+        'support.instruction5': 'Brug pilene til at navigere mellem uger',
+        'support.shortcuts': 'Tastaturgenveje',
+        'support.escAction': 'Luk modaler',
+        'support.enterAction': 'Gem opgave',
+        'someday': 'En dag',
+        'addTask': '+ Tilføj opgave',
+        'deleteConfirm': 'Slet denne opgave?',
+        'days': {
+            'Sun': 'Søn',
+            'Mon': 'Man',
+            'Tue': 'Tir',
+            'Wed': 'Ons',
+            'Thu': 'Tor',
+            'Fri': 'Fre',
+            'Sat': 'Lør'
+        },
+        'months': ['Januar', 'Februar', 'Marts', 'April', 'Maj', 'Juni',
+                   'Juli', 'August', 'September', 'Oktober', 'November', 'December']
+    },
+    kl: {
+        'menu.print': 'Qalersitsineq',
+        'menu.share': 'Akissut',
+        'menu.support': 'Ikiuutit',
+        'support.title': 'Ikiuutit',
+        'support.howToUse': 'Qanoq atorneqartoq',
+        'support.instruction1': 'Ulloq ilassutit suliaq ilaasortussannilluinnarpoq',
+        'support.instruction2': 'Suliaq quppaligu ineriartortinneqartussannerat takusartussannilluinnarpoq',
+        'support.instruction3': 'Suliaq aqusaaruk allannguutinullu ilalluinnarpoq',
+        'support.instruction4': 'Suliaq ilassutit allannguutissavai',
+        'support.instruction5': 'Sapaatip akunnera marluk atorlugo',
+        'support.shortcuts': 'Tastatuurip akiussai',
+        'support.escAction': 'Matussanik pissarineq',
+        'support.enterAction': 'Suliaq aqutsissivik',
+        'someday': 'Ulluinnarmi',
+        'addTask': '+ Suliaq ilaat',
+        'deleteConfirm': 'Suliaq peeruk?',
+        'days': {
+            'Sun': 'Sap',
+            'Mon': 'Ata',
+            'Tue': 'Mar',
+            'Wed': 'Pin',
+            'Thu': 'Sis',
+            'Fri': 'Tal',
+            'Sat': 'Arf'
+        },
+        'months': ['Januaari', 'Februaari', 'Marsi', 'Apriili', 'Maaji', 'Juuni',
+                   'Juuli', 'Aggusti', 'Septembari', 'Oktobari', 'Novembari', 'Decembari']
+    }
+};
+
+// Helper function to get translation
+function t(key) {
+    const keys = key.split('.');
+    let value = translations[currentLanguage];
+
+    for (const k of keys) {
+        value = value?.[k];
+    }
+
+    return value || key;
+}
+
+// Update all translated elements
+function updateTranslations() {
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        el.textContent = t(key);
+    });
+
+    // Update someday header
+    const somedayHeader = document.querySelector('.someday-header');
+    if (somedayHeader) {
+        somedayHeader.textContent = t('someday');
+    }
+
+    // Re-render week to update day names and month
+    renderWeek();
+}
+
+// Change language
+function changeLanguage(lang) {
+    currentLanguage = lang;
+    localStorage.setItem('weeklyPlannerLanguage', lang);
+    updateTranslations();
+}
+
+// Load language from storage
+function loadLanguageFromStorage() {
+    const stored = localStorage.getItem('weeklyPlannerLanguage');
+    if (stored && translations[stored]) {
+        currentLanguage = stored;
+        document.getElementById('languageSelect').value = stored;
+    }
+}
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
     loadTasksFromStorage();
+    loadLanguageFromStorage();
+    updateTranslations();
     renderWeek();
     setupEventListeners();
 });
@@ -39,13 +178,13 @@ function formatDate(date) {
 }
 
 function formatDayName(date) {
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    return days[date.getDay()];
+    const daysEn = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const dayKey = daysEn[date.getDay()];
+    return t(`days.${dayKey}`);
 }
 
 function formatMonthYear(date) {
-    const months = ['January', 'February', 'March', 'April', 'May', 'June',
-                   'July', 'August', 'September', 'October', 'November', 'December'];
+    const months = t('months');
     return `${months[date.getMonth()]} ${date.getFullYear()}`;
 }
 
@@ -79,7 +218,8 @@ function renderWeek() {
 // Create day column
 function createDayColumn(date, dateKey) {
     const dayColumn = document.createElement('div');
-    dayColumn.className = `day-column${isToday(date) ? ' today' : ''}`;
+    const isWeekend = date.getDay() === 0 || date.getDay() === 6; // Sunday or Saturday
+    dayColumn.className = `day-column${isToday(date) ? ' today' : ''}${isWeekend ? ' weekend' : ''}`;
 
     // Header
     const header = document.createElement('div');
@@ -112,7 +252,7 @@ function createDayColumn(date, dateKey) {
     // Add task area
     const addTaskArea = document.createElement('div');
     addTaskArea.className = 'add-task-area';
-    addTaskArea.textContent = '+ Add task';
+    addTaskArea.textContent = t('addTask');
     addTaskArea.onclick = () => createNewTask(dateKey, tasksContainer);
 
     // Drag and drop for add task area
@@ -264,7 +404,7 @@ function editTask(taskId, dateKey, taskEl) {
 
 // Delete task
 function deleteTask(taskId, dateKey) {
-    if (confirm('Delete this task?')) {
+    if (confirm(t('deleteConfirm'))) {
         tasks[dateKey] = tasks[dateKey].filter(t => t.id !== taskId);
         if (tasks[dateKey].length === 0) {
             delete tasks[dateKey];
@@ -370,7 +510,7 @@ function renderSomedayTasks() {
 
     const addTaskArea = document.createElement('div');
     addTaskArea.className = 'add-task-area';
-    addTaskArea.textContent = '+ Add task';
+    addTaskArea.textContent = t('addTask');
     addTaskArea.onclick = () => createNewTask('someday', somedayContainer);
 
     // Drag and drop
@@ -399,6 +539,60 @@ function loadTasksFromStorage() {
     }
 }
 
+// Menu functions
+function toggleMenu() {
+    const menu = document.getElementById('menuDropdown');
+    menu.classList.toggle('active');
+}
+
+function closeMenu() {
+    const menu = document.getElementById('menuDropdown');
+    menu.classList.remove('active');
+}
+
+function handlePrint() {
+    closeMenu();
+    window.print();
+}
+
+function handleShare() {
+    closeMenu();
+    const weekDates = getWeekDates(currentWeekOffset);
+    const startDate = formatDate(weekDates[0]);
+    const endDate = formatDate(weekDates[6]);
+    const title = `Weekly Planner - ${formatMonthYear(weekDates[0])}`;
+    const text = `My weekly planner for ${startDate} to ${endDate}`;
+
+    // Check if Web Share API is supported
+    if (navigator.share) {
+        navigator.share({
+            title: title,
+            text: text,
+            url: window.location.href
+        }).catch((error) => {
+            console.log('Error sharing:', error);
+        });
+    } else {
+        // Fallback: copy URL to clipboard
+        navigator.clipboard.writeText(window.location.href).then(() => {
+            alert('Link copied to clipboard!');
+        }).catch((error) => {
+            console.log('Error copying to clipboard:', error);
+        });
+    }
+}
+
+function openSupportModal() {
+    closeMenu();
+    const modal = document.getElementById('supportModal');
+    modal.classList.add('active');
+}
+
+function closeSupportModal() {
+    const modal = document.getElementById('supportModal');
+    modal.classList.remove('active');
+}
+
 // Event listeners
 function setupEventListeners() {
     // Week navigation
@@ -419,10 +613,43 @@ function setupEventListeners() {
         });
     });
 
+    // Menu
+    document.getElementById('menuBtn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleMenu();
+    });
+
+    document.getElementById('printBtn').addEventListener('click', handlePrint);
+    document.getElementById('shareBtn').addEventListener('click', handleShare);
+    document.getElementById('supportBtn').addEventListener('click', openSupportModal);
+
+    document.getElementById('languageSelect').addEventListener('change', (e) => {
+        changeLanguage(e.target.value);
+    });
+
+    // Close menu when clicking outside
+    document.addEventListener('click', (e) => {
+        const menu = document.getElementById('menuDropdown');
+        const menuBtn = document.getElementById('menuBtn');
+        if (!menu.contains(e.target) && !menuBtn.contains(e.target)) {
+            closeMenu();
+        }
+    });
+
+    // Support modal
+    document.getElementById('closeSupportBtn').addEventListener('click', closeSupportModal);
+    document.getElementById('supportModal').addEventListener('click', (e) => {
+        if (e.target.id === 'supportModal') {
+            closeSupportModal();
+        }
+    });
+
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             closeColorPicker();
+            closeSupportModal();
+            closeMenu();
         }
     });
 }

@@ -1,6 +1,6 @@
 # Weekly Planner
 
-A minimalist weekly planner web application inspired by [Tweek](https://tweek.so/), optimized for both desktop and mobile devices.
+A minimalist weekly planner web application optimized for both desktop and mobile devices.
 
 ## Features
 
@@ -84,17 +84,6 @@ Simply open `index.html` in your web browser. No installation or setup required!
 - No frameworks or dependencies
 - Lightweight and fast
 - Mobile-first responsive design
-
-## Features Comparison with Tweek
-
-This planner captures the essence of Tweek:
-- ✅ Minimal, clean design
-- ✅ Weekly calendar view
-- ✅ Drag and drop tasks
-- ✅ Color coding
-- ✅ Mobile responsive
-- ✅ Quick task entry
-- ✅ Someday/unscheduled section
 
 ## License
 

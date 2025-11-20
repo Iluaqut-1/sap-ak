@@ -5,6 +5,8 @@ let currentEditingTask = null;
 let draggedTask = null;
 let currentLanguage = 'en';
 let taskPopoverState = { taskId: null, dateKey: null, position: null };
+let isCloning = false;
+let draggedOverTask = null;
 
 // Internationalization
 const translations = {
@@ -23,7 +25,7 @@ const translations = {
         'support.escAction': 'Close modals',
         'support.enterAction': 'Save task',
         'someday': 'Someday',
-        'addTask': '+ Add task',
+        'addTask': 'Add a task...',
         'deleteConfirm': 'Delete this task?',
         'days': {
             'Sun': 'Sun',
@@ -52,7 +54,7 @@ const translations = {
         'support.escAction': 'Luk modaler',
         'support.enterAction': 'Gem opgave',
         'someday': 'En dag',
-        'addTask': '+ Tilføj opgave',
+        'addTask': 'Tilføj opgave...',
         'deleteConfirm': 'Slet denne opgave?',
         'days': {
             'Sun': 'Søn',
@@ -81,7 +83,7 @@ const translations = {
         'support.escAction': 'Matussanik pissarineq',
         'support.enterAction': 'Suliaq aqutsissivik',
         'someday': 'Ulluinnarmi',
-        'addTask': '+ Suliaq ilaat',
+        'addTask': 'Suliaq ilaat...',
         'deleteConfirm': 'Suliaq peeruk?',
         'days': {
             'Sun': 'Sap',
@@ -307,6 +309,17 @@ function createTaskElement(task, dateKey) {
     cloneIcon.className = 'clone-icon';
     cloneIcon.innerHTML = '⋮⋮';
     cloneIcon.title = 'Drag to copy';
+    cloneIcon.draggable = true;
+    cloneIcon.addEventListener('dragstart', (e) => {
+        e.stopPropagation();
+        isCloning = true;
+        handleDragStart(e, task, dateKey);
+    });
+    cloneIcon.addEventListener('dragend', (e) => {
+        e.stopPropagation();
+        isCloning = false;
+        handleDragEnd(e);
+    });
     taskEl.appendChild(cloneIcon);
 
     // Complete overlay (underline effect on hover)
@@ -331,15 +344,6 @@ function createTaskElement(task, dateKey) {
         toggleTaskComplete(task.id, dateKey);
     };
 
-    const colorBtn = document.createElement('button');
-    colorBtn.className = 'task-action-btn';
-    colorBtn.innerHTML = '🎨';
-    colorBtn.title = 'Change color';
-    colorBtn.onclick = (e) => {
-        e.stopPropagation();
-        openColorPicker(task.id, dateKey);
-    };
-
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'task-action-btn';
     deleteBtn.innerHTML = '✕';
@@ -350,7 +354,6 @@ function createTaskElement(task, dateKey) {
     };
 
     actions.appendChild(completeBtn);
-    actions.appendChild(colorBtn);
     actions.appendChild(deleteBtn);
     taskEl.appendChild(actions);
 
@@ -364,6 +367,9 @@ function createTaskElement(task, dateKey) {
     // Drag events
     taskEl.addEventListener('dragstart', (e) => handleDragStart(e, task, dateKey));
     taskEl.addEventListener('dragend', handleDragEnd);
+    taskEl.addEventListener('dragover', (e) => handleTaskDragOver(e, task, dateKey));
+    taskEl.addEventListener('dragleave', handleTaskDragLeave);
+    taskEl.addEventListener('drop', (e) => handleTaskDrop(e, task, dateKey));
 
     return taskEl;
 }
@@ -458,15 +464,27 @@ function openTaskPopover(taskId, dateKey, taskElement) {
     taskPopoverState = { taskId, dateKey, taskElement };
 
     const popover = document.getElementById('taskPopover');
+    const backdrop = document.getElementById('taskPopoverBackdrop');
     const textarea = document.getElementById('taskEditorTextarea');
 
     // Set textarea value
     textarea.value = task.text;
 
+    // Set current color selection
+    document.querySelectorAll('.color-option-small').forEach(btn => {
+        btn.classList.remove('selected');
+        if (btn.dataset.color === (task.color || 'default')) {
+            btn.classList.add('selected');
+        }
+    });
+
+    // Display attached files if any
+    displayAttachedFiles(task);
+
     // Position popover near the task
     const rect = taskElement.getBoundingClientRect();
     const popoverWidth = 400;
-    const popoverHeight = 350;
+    const popoverHeight = 450;
 
     let left = rect.right + 10;
     let top = rect.top;
@@ -490,6 +508,9 @@ function openTaskPopover(taskId, dateKey, taskElement) {
 
     popover.style.left = `${left}px`;
     popover.style.top = `${top}px`;
+
+    // Show backdrop and popover
+    backdrop.classList.add('active');
     popover.classList.add('active');
 
     // Focus textarea
@@ -500,7 +521,9 @@ function openTaskPopover(taskId, dateKey, taskElement) {
 // Close task popover
 function closeTaskPopover() {
     const popover = document.getElementById('taskPopover');
+    const backdrop = document.getElementById('taskPopoverBackdrop');
     const textarea = document.getElementById('taskEditorTextarea');
+    const moveDropdown = document.getElementById('taskMoveDropdown');
 
     // Save changes
     if (taskPopoverState.taskId && taskPopoverState.dateKey) {
@@ -515,7 +538,10 @@ function closeTaskPopover() {
         }
     }
 
+    // Hide popover, backdrop, and dropdown
     popover.classList.remove('active');
+    backdrop.classList.remove('active');
+    moveDropdown.classList.remove('active');
     taskPopoverState = { taskId: null, dateKey: null, taskElement: null };
 }
 
@@ -561,15 +587,40 @@ function applyTextFormatting(format) {
                 return;
             }
             break;
+        case 'emoji':
+            // Trigger native emoji picker if available
+            const fileInput = document.getElementById('fileInput');
+            if (typeof fileInput.showPicker === 'undefined') {
+                // Fallback: insert common emojis
+                const emoji = prompt('Enter emoji or choose: 😀 ✅ ❤️ 🎉 ⭐ 📝 💡 🔥');
+                if (emoji) {
+                    newText = `${beforeText}${emoji}${afterText}`;
+                    cursorOffset = emoji.length;
+                }
+            } else {
+                // For browsers that support it, try to use native picker
+                const emoji = prompt('Enter emoji: 😀 ✅ ❤️ 🎉 ⭐ 📝 💡 🔥 👍 ✨');
+                if (emoji) {
+                    newText = `${beforeText}${emoji}${afterText}`;
+                    cursorOffset = emoji.length;
+                }
+            }
+            break;
+        case 'file':
+            // Trigger file input
+            document.getElementById('fileInput').click();
+            return;
     }
 
-    textarea.value = newText;
-    textarea.focus();
+    if (newText) {
+        textarea.value = newText;
+        textarea.focus();
 
-    if (format === 'bold' || format === 'italic') {
-        textarea.setSelectionRange(start + cursorOffset, end + cursorOffset);
-    } else {
-        textarea.setSelectionRange(start + cursorOffset, start + cursorOffset);
+        if (format === 'bold' || format === 'italic') {
+            textarea.setSelectionRange(start + cursorOffset, end + cursorOffset);
+        } else {
+            textarea.setSelectionRange(start + cursorOffset, start + cursorOffset);
+        }
     }
 }
 
@@ -694,21 +745,130 @@ function handleDrop(e, targetDateKey) {
     if (draggedTask) {
         const { task, dateKey: sourceDateKey } = draggedTask;
 
-        // Remove from source
-        tasks[sourceDateKey] = tasks[sourceDateKey].filter(t => t.id !== task.id);
-        if (tasks[sourceDateKey].length === 0) {
-            delete tasks[sourceDateKey];
-        }
+        if (isCloning) {
+            // Clone the task
+            const clonedTask = {
+                ...task,
+                id: Date.now().toString()
+            };
 
-        // Add to target
-        if (!tasks[targetDateKey]) {
-            tasks[targetDateKey] = [];
+            // Add to target
+            if (!tasks[targetDateKey]) {
+                tasks[targetDateKey] = [];
+            }
+            tasks[targetDateKey].push(clonedTask);
+        } else {
+            // Move the task
+            // Remove from source
+            tasks[sourceDateKey] = tasks[sourceDateKey].filter(t => t.id !== task.id);
+            if (tasks[sourceDateKey].length === 0) {
+                delete tasks[sourceDateKey];
+            }
+
+            // Add to target
+            if (!tasks[targetDateKey]) {
+                tasks[targetDateKey] = [];
+            }
+            tasks[targetDateKey].push(task);
         }
-        tasks[targetDateKey].push(task);
 
         saveTasksToStorage();
         renderWeek();
     }
+}
+
+// Handle drag over task (for reordering)
+function handleTaskDragOver(e, targetTask, targetDateKey) {
+    if (!draggedTask) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const { task: draggedTaskData, dateKey: sourceDateKey } = draggedTask;
+
+    // Don't allow dropping on itself
+    if (draggedTaskData.id === targetTask.id) return;
+
+    e.currentTarget.classList.add('drag-over-task');
+    draggedOverTask = { task: targetTask, dateKey: targetDateKey, element: e.currentTarget };
+}
+
+// Handle drag leave task
+function handleTaskDragLeave(e) {
+    e.currentTarget.classList.remove('drag-over-task');
+}
+
+// Handle drop on task (for reordering)
+function handleTaskDrop(e, targetTask, targetDateKey) {
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.classList.remove('drag-over-task');
+
+    if (!draggedTask) return;
+
+    const { task: draggedTaskData, dateKey: sourceDateKey } = draggedTask;
+
+    // Don't allow dropping on itself
+    if (draggedTaskData.id === targetTask.id) return;
+
+    // Determine if we're dropping above or below the target
+    const rect = e.currentTarget.getBoundingClientRect();
+    const mouseY = e.clientY;
+    const targetMiddle = rect.top + rect.height / 2;
+    const insertBefore = mouseY < targetMiddle;
+
+    if (isCloning) {
+        // Clone the task
+        const clonedTask = {
+            ...draggedTaskData,
+            id: Date.now().toString()
+        };
+
+        if (!tasks[targetDateKey]) {
+            tasks[targetDateKey] = [];
+        }
+
+        const targetIndex = tasks[targetDateKey].findIndex(t => t.id === targetTask.id);
+        const insertIndex = insertBefore ? targetIndex : targetIndex + 1;
+        tasks[targetDateKey].splice(insertIndex, 0, clonedTask);
+    } else {
+        // Move the task
+        if (sourceDateKey === targetDateKey) {
+            // Reordering within the same day
+            const taskArray = tasks[sourceDateKey];
+            const draggedIndex = taskArray.findIndex(t => t.id === draggedTaskData.id);
+            const targetIndex = taskArray.findIndex(t => t.id === targetTask.id);
+
+            // Remove from old position
+            taskArray.splice(draggedIndex, 1);
+
+            // Calculate new index (account for removal)
+            let newTargetIndex = taskArray.findIndex(t => t.id === targetTask.id);
+            const insertIndex = insertBefore ? newTargetIndex : newTargetIndex + 1;
+
+            // Insert at new position
+            taskArray.splice(insertIndex, 0, draggedTaskData);
+        } else {
+            // Moving between different days
+            // Remove from source
+            tasks[sourceDateKey] = tasks[sourceDateKey].filter(t => t.id !== draggedTaskData.id);
+            if (tasks[sourceDateKey].length === 0) {
+                delete tasks[sourceDateKey];
+            }
+
+            // Add to target at specific position
+            if (!tasks[targetDateKey]) {
+                tasks[targetDateKey] = [];
+            }
+
+            const targetIndex = tasks[targetDateKey].findIndex(t => t.id === targetTask.id);
+            const insertIndex = insertBefore ? targetIndex : targetIndex + 1;
+            tasks[targetDateKey].splice(insertIndex, 0, draggedTaskData);
+        }
+    }
+
+    saveTasksToStorage();
+    renderWeek();
 }
 
 // Someday section
@@ -808,6 +968,96 @@ function closeSupportModal() {
     modal.classList.remove('active');
 }
 
+// Display attached files
+function displayAttachedFiles(task) {
+    const attachedFilesContainer = document.getElementById('attachedFiles');
+    attachedFilesContainer.innerHTML = '';
+
+    if (task.attachedFiles && task.attachedFiles.length > 0) {
+        task.attachedFiles.forEach((file, index) => {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'attached-file-item';
+            fileItem.innerHTML = `
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                    <polyline points="13 2 13 9 20 9"></polyline>
+                </svg>
+                <span class="attached-file-name">${file.name}</span>
+                <button class="attached-file-remove" onclick="removeAttachedFile(${index})" aria-label="Remove file">✕</button>
+            `;
+            attachedFilesContainer.appendChild(fileItem);
+        });
+    }
+}
+
+// Handle file input change
+function handleFileInput(e) {
+    const files = Array.from(e.target.files);
+    if (files.length === 0 || !taskPopoverState.taskId || !taskPopoverState.dateKey) return;
+
+    const task = tasks[taskPopoverState.dateKey]?.find(t => t.id === taskPopoverState.taskId);
+    if (!task) return;
+
+    // Initialize attachedFiles if not exists
+    if (!task.attachedFiles) {
+        task.attachedFiles = [];
+    }
+
+    // Add files (store only file names and sizes for now)
+    files.forEach(file => {
+        task.attachedFiles.push({
+            name: file.name,
+            size: file.size,
+            type: file.type
+        });
+    });
+
+    saveTasksToStorage();
+    displayAttachedFiles(task);
+
+    // Clear file input
+    e.target.value = '';
+}
+
+// Remove attached file
+function removeAttachedFile(index) {
+    if (!taskPopoverState.taskId || !taskPopoverState.dateKey) return;
+
+    const task = tasks[taskPopoverState.dateKey]?.find(t => t.id === taskPopoverState.taskId);
+    if (!task || !task.attachedFiles) return;
+
+    task.attachedFiles.splice(index, 1);
+    saveTasksToStorage();
+    displayAttachedFiles(task);
+}
+
+// Toggle move dropdown menu
+function toggleMoveDropdown() {
+    const dropdown = document.getElementById('taskMoveDropdown');
+    dropdown.classList.toggle('active');
+}
+
+// Set task color from popover
+function setTaskColorFromPopover(color) {
+    if (!taskPopoverState.taskId || !taskPopoverState.dateKey) return;
+
+    const task = tasks[taskPopoverState.dateKey]?.find(t => t.id === taskPopoverState.taskId);
+    if (!task) return;
+
+    task.color = color;
+
+    // Update selected color button
+    document.querySelectorAll('.color-option-small').forEach(btn => {
+        btn.classList.remove('selected');
+        if (btn.dataset.color === color) {
+            btn.classList.add('selected');
+        }
+    });
+
+    saveTasksToStorage();
+    renderWeek();
+}
+
 // Event listeners
 function setupEventListeners() {
     // Week navigation
@@ -830,10 +1080,12 @@ function setupEventListeners() {
 
     // Task popover
     document.getElementById('closeTaskPopover').addEventListener('click', closeTaskPopover);
-    document.getElementById('taskPopover').addEventListener('click', (e) => {
-        if (e.target.id === 'taskPopover') {
-            closeTaskPopover();
-        }
+    document.getElementById('taskPopoverBackdrop').addEventListener('click', closeTaskPopover);
+
+    // Three-dots menu in popover
+    document.getElementById('taskPopoverMenuBtn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleMoveDropdown();
     });
 
     // Toolbar buttons
@@ -844,13 +1096,24 @@ function setupEventListeners() {
         });
     });
 
-    // Move task buttons
-    document.querySelectorAll('.move-menu-btn').forEach(btn => {
+    // Move task buttons (dropdown items)
+    document.querySelectorAll('.move-dropdown-item').forEach(btn => {
         btn.addEventListener('click', () => {
             const action = btn.dataset.move;
             moveTask(action);
         });
     });
+
+    // Color picker in popover
+    document.querySelectorAll('.color-option-small').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const color = btn.dataset.color;
+            setTaskColorFromPopover(color);
+        });
+    });
+
+    // File input
+    document.getElementById('fileInput').addEventListener('change', handleFileInput);
 
     // Menu
     document.getElementById('menuBtn').addEventListener('click', (e) => {

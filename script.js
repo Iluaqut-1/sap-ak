@@ -5,6 +5,7 @@ let currentEditingTask = null;
 let draggedTask = null;
 let currentLanguage = 'en';
 let taskPopoverState = { taskId: null, dateKey: null, position: null };
+let isCloning = false;
 let draggedOverTask = null;
 
 // Internationalization
@@ -316,6 +317,33 @@ function createTaskElement(task, dateKey) {
     taskText.innerHTML = formatTaskText(task.text);
     taskEl.appendChild(taskText);
 
+    // Clone icon
+    const cloneIcon = document.createElement('span');
+    cloneIcon.className = 'clone-icon';
+    cloneIcon.innerHTML = '⋮⋮';
+    cloneIcon.title = 'Drag to copy';
+    cloneIcon.draggable = true;
+    cloneIcon.addEventListener('dragstart', (e) => {
+        e.stopPropagation();
+        isCloning = true;
+        handleDragStart(e, task, dateKey);
+    });
+    cloneIcon.addEventListener('dragend', (e) => {
+        e.stopPropagation();
+        isCloning = false;
+        handleDragEnd(e);
+    });
+    cloneIcon.addEventListener('touchstart', (e) => {
+        e.stopPropagation();
+        isCloning = true;
+        handleTouchStart(e, task, dateKey);
+    });
+    cloneIcon.addEventListener('touchend', (e) => {
+        e.stopPropagation();
+        isCloning = false;
+    });
+    taskEl.appendChild(cloneIcon);
+
     // Complete overlay (underline effect on hover)
     const completeOverlay = document.createElement('div');
     completeOverlay.className = 'task-complete-overlay';
@@ -598,25 +626,6 @@ function applyTextFormatting(format) {
                 return;
             }
             break;
-        case 'emoji':
-            // Trigger native emoji picker if available
-            const fileInput = document.getElementById('fileInput');
-            if (typeof fileInput.showPicker === 'undefined') {
-                // Fallback: insert common emojis
-                const emoji = prompt('Enter emoji or choose: 😀 ✅ ❤️ 🎉 ⭐ 📝 💡 🔥');
-                if (emoji) {
-                    newText = `${beforeText}${emoji}${afterText}`;
-                    cursorOffset = emoji.length;
-                }
-            } else {
-                // For browsers that support it, try to use native picker
-                const emoji = prompt('Enter emoji: 😀 ✅ ❤️ 🎉 ⭐ 📝 💡 🔥 👍 ✨');
-                if (emoji) {
-                    newText = `${beforeText}${emoji}${afterText}`;
-                    cursorOffset = emoji.length;
-                }
-            }
-            break;
         case 'file':
             // Trigger file input
             document.getElementById('fileInput').click();
@@ -761,18 +770,32 @@ function handleDrop(e, targetDateKey) {
     if (draggedTask) {
         const { task, dateKey: sourceDateKey } = draggedTask;
 
-        // Move the task
-        // Remove from source
-        tasks[sourceDateKey] = tasks[sourceDateKey].filter(t => t.id !== task.id);
-        if (tasks[sourceDateKey].length === 0) {
-            delete tasks[sourceDateKey];
-        }
+        if (isCloning) {
+            // Clone the task
+            const clonedTask = {
+                ...task,
+                id: Date.now().toString()
+            };
 
-        // Add to target
-        if (!tasks[targetDateKey]) {
-            tasks[targetDateKey] = [];
+            // Add to target
+            if (!tasks[targetDateKey]) {
+                tasks[targetDateKey] = [];
+            }
+            tasks[targetDateKey].push(clonedTask);
+        } else {
+            // Move the task
+            // Remove from source
+            tasks[sourceDateKey] = tasks[sourceDateKey].filter(t => t.id !== task.id);
+            if (tasks[sourceDateKey].length === 0) {
+                delete tasks[sourceDateKey];
+            }
+
+            // Add to target
+            if (!tasks[targetDateKey]) {
+                tasks[targetDateKey] = [];
+            }
+            tasks[targetDateKey].push(task);
         }
-        tasks[targetDateKey].push(task);
 
         // Haptic feedback on drop
         if (navigator.vibrate) {
@@ -824,38 +847,54 @@ function handleTaskDrop(e, targetTask, targetDateKey) {
     const targetMiddle = rect.top + rect.height / 2;
     const insertBefore = mouseY < targetMiddle;
 
-    // Move the task
-    if (sourceDateKey === targetDateKey) {
-        // Reordering within the same day
-        const taskArray = tasks[sourceDateKey];
-        const draggedIndex = taskArray.findIndex(t => t.id === draggedTaskData.id);
-        const targetIndex = taskArray.findIndex(t => t.id === targetTask.id);
+    if (isCloning) {
+        // Clone the task
+        const clonedTask = {
+            ...draggedTaskData,
+            id: Date.now().toString()
+        };
 
-        // Remove from old position
-        taskArray.splice(draggedIndex, 1);
-
-        // Calculate new index (account for removal)
-        let newTargetIndex = taskArray.findIndex(t => t.id === targetTask.id);
-        const insertIndex = insertBefore ? newTargetIndex : newTargetIndex + 1;
-
-        // Insert at new position
-        taskArray.splice(insertIndex, 0, draggedTaskData);
-    } else {
-        // Moving between different days
-        // Remove from source
-        tasks[sourceDateKey] = tasks[sourceDateKey].filter(t => t.id !== draggedTaskData.id);
-        if (tasks[sourceDateKey].length === 0) {
-            delete tasks[sourceDateKey];
-        }
-
-        // Add to target at specific position
         if (!tasks[targetDateKey]) {
             tasks[targetDateKey] = [];
         }
 
         const targetIndex = tasks[targetDateKey].findIndex(t => t.id === targetTask.id);
         const insertIndex = insertBefore ? targetIndex : targetIndex + 1;
-        tasks[targetDateKey].splice(insertIndex, 0, draggedTaskData);
+        tasks[targetDateKey].splice(insertIndex, 0, clonedTask);
+    } else {
+        // Move the task
+        if (sourceDateKey === targetDateKey) {
+            // Reordering within the same day
+            const taskArray = tasks[sourceDateKey];
+            const draggedIndex = taskArray.findIndex(t => t.id === draggedTaskData.id);
+            const targetIndex = taskArray.findIndex(t => t.id === targetTask.id);
+
+            // Remove from old position
+            taskArray.splice(draggedIndex, 1);
+
+            // Calculate new index (account for removal)
+            let newTargetIndex = taskArray.findIndex(t => t.id === targetTask.id);
+            const insertIndex = insertBefore ? newTargetIndex : newTargetIndex + 1;
+
+            // Insert at new position
+            taskArray.splice(insertIndex, 0, draggedTaskData);
+        } else {
+            // Moving between different days
+            // Remove from source
+            tasks[sourceDateKey] = tasks[sourceDateKey].filter(t => t.id !== draggedTaskData.id);
+            if (tasks[sourceDateKey].length === 0) {
+                delete tasks[sourceDateKey];
+            }
+
+            // Add to target at specific position
+            if (!tasks[targetDateKey]) {
+                tasks[targetDateKey] = [];
+            }
+
+            const targetIndex = tasks[targetDateKey].findIndex(t => t.id === targetTask.id);
+            const insertIndex = insertBefore ? targetIndex : targetIndex + 1;
+            tasks[targetDateKey].splice(insertIndex, 0, draggedTaskData);
+        }
     }
 
     // Haptic feedback on drop

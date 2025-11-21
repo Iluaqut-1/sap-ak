@@ -5,7 +5,6 @@ let currentEditingTask = null;
 let draggedTask = null;
 let currentLanguage = 'en';
 let taskPopoverState = { taskId: null, dateKey: null, position: null };
-let isCloning = false;
 let draggedOverTask = null;
 
 // Internationalization
@@ -317,33 +316,6 @@ function createTaskElement(task, dateKey) {
     taskText.innerHTML = formatTaskText(task.text);
     taskEl.appendChild(taskText);
 
-    // Clone icon
-    const cloneIcon = document.createElement('span');
-    cloneIcon.className = 'clone-icon';
-    cloneIcon.innerHTML = '⋮⋮';
-    cloneIcon.title = 'Drag to copy';
-    cloneIcon.draggable = true;
-    cloneIcon.addEventListener('dragstart', (e) => {
-        e.stopPropagation();
-        isCloning = true;
-        handleDragStart(e, task, dateKey);
-    });
-    cloneIcon.addEventListener('dragend', (e) => {
-        e.stopPropagation();
-        isCloning = false;
-        handleDragEnd(e);
-    });
-    cloneIcon.addEventListener('touchstart', (e) => {
-        e.stopPropagation();
-        isCloning = true;
-        handleTouchStart(e, task, dateKey);
-    });
-    cloneIcon.addEventListener('touchend', (e) => {
-        e.stopPropagation();
-        isCloning = false;
-    });
-    taskEl.appendChild(cloneIcon);
-
     // Complete overlay (underline effect on hover)
     const completeOverlay = document.createElement('div');
     completeOverlay.className = 'task-complete-overlay';
@@ -460,7 +432,7 @@ function createNewTask(dateKey, container) {
             const task = {
                 id: Date.now().toString(),
                 text: text,
-                color: 'default',
+                color: '',
                 completed: false
             };
 
@@ -789,32 +761,18 @@ function handleDrop(e, targetDateKey) {
     if (draggedTask) {
         const { task, dateKey: sourceDateKey } = draggedTask;
 
-        if (isCloning) {
-            // Clone the task
-            const clonedTask = {
-                ...task,
-                id: Date.now().toString()
-            };
-
-            // Add to target
-            if (!tasks[targetDateKey]) {
-                tasks[targetDateKey] = [];
-            }
-            tasks[targetDateKey].push(clonedTask);
-        } else {
-            // Move the task
-            // Remove from source
-            tasks[sourceDateKey] = tasks[sourceDateKey].filter(t => t.id !== task.id);
-            if (tasks[sourceDateKey].length === 0) {
-                delete tasks[sourceDateKey];
-            }
-
-            // Add to target
-            if (!tasks[targetDateKey]) {
-                tasks[targetDateKey] = [];
-            }
-            tasks[targetDateKey].push(task);
+        // Move the task
+        // Remove from source
+        tasks[sourceDateKey] = tasks[sourceDateKey].filter(t => t.id !== task.id);
+        if (tasks[sourceDateKey].length === 0) {
+            delete tasks[sourceDateKey];
         }
+
+        // Add to target
+        if (!tasks[targetDateKey]) {
+            tasks[targetDateKey] = [];
+        }
+        tasks[targetDateKey].push(task);
 
         // Haptic feedback on drop
         if (navigator.vibrate) {
@@ -866,54 +824,38 @@ function handleTaskDrop(e, targetTask, targetDateKey) {
     const targetMiddle = rect.top + rect.height / 2;
     const insertBefore = mouseY < targetMiddle;
 
-    if (isCloning) {
-        // Clone the task
-        const clonedTask = {
-            ...draggedTaskData,
-            id: Date.now().toString()
-        };
+    // Move the task
+    if (sourceDateKey === targetDateKey) {
+        // Reordering within the same day
+        const taskArray = tasks[sourceDateKey];
+        const draggedIndex = taskArray.findIndex(t => t.id === draggedTaskData.id);
+        const targetIndex = taskArray.findIndex(t => t.id === targetTask.id);
 
+        // Remove from old position
+        taskArray.splice(draggedIndex, 1);
+
+        // Calculate new index (account for removal)
+        let newTargetIndex = taskArray.findIndex(t => t.id === targetTask.id);
+        const insertIndex = insertBefore ? newTargetIndex : newTargetIndex + 1;
+
+        // Insert at new position
+        taskArray.splice(insertIndex, 0, draggedTaskData);
+    } else {
+        // Moving between different days
+        // Remove from source
+        tasks[sourceDateKey] = tasks[sourceDateKey].filter(t => t.id !== draggedTaskData.id);
+        if (tasks[sourceDateKey].length === 0) {
+            delete tasks[sourceDateKey];
+        }
+
+        // Add to target at specific position
         if (!tasks[targetDateKey]) {
             tasks[targetDateKey] = [];
         }
 
         const targetIndex = tasks[targetDateKey].findIndex(t => t.id === targetTask.id);
         const insertIndex = insertBefore ? targetIndex : targetIndex + 1;
-        tasks[targetDateKey].splice(insertIndex, 0, clonedTask);
-    } else {
-        // Move the task
-        if (sourceDateKey === targetDateKey) {
-            // Reordering within the same day
-            const taskArray = tasks[sourceDateKey];
-            const draggedIndex = taskArray.findIndex(t => t.id === draggedTaskData.id);
-            const targetIndex = taskArray.findIndex(t => t.id === targetTask.id);
-
-            // Remove from old position
-            taskArray.splice(draggedIndex, 1);
-
-            // Calculate new index (account for removal)
-            let newTargetIndex = taskArray.findIndex(t => t.id === targetTask.id);
-            const insertIndex = insertBefore ? newTargetIndex : newTargetIndex + 1;
-
-            // Insert at new position
-            taskArray.splice(insertIndex, 0, draggedTaskData);
-        } else {
-            // Moving between different days
-            // Remove from source
-            tasks[sourceDateKey] = tasks[sourceDateKey].filter(t => t.id !== draggedTaskData.id);
-            if (tasks[sourceDateKey].length === 0) {
-                delete tasks[sourceDateKey];
-            }
-
-            // Add to target at specific position
-            if (!tasks[targetDateKey]) {
-                tasks[targetDateKey] = [];
-            }
-
-            const targetIndex = tasks[targetDateKey].findIndex(t => t.id === targetTask.id);
-            const insertIndex = insertBefore ? targetIndex : targetIndex + 1;
-            tasks[targetDateKey].splice(insertIndex, 0, draggedTaskData);
-        }
+        tasks[targetDateKey].splice(insertIndex, 0, draggedTaskData);
     }
 
     // Haptic feedback on drop
@@ -1095,24 +1037,32 @@ function handleTouchEnd(e, targetDateKey) {
 
             if (task) {
                 if (swipeDirection === 'left') {
-                    // Swipe left - delete task
+                    // Swipe left - delete task with confirmation
                     if (navigator.vibrate) {
                         navigator.vibrate([30, 10, 30]);
                     }
 
-                    // Animate out
-                    taskItem.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
-                    taskItem.style.transform = 'translateX(-100%)';
-                    taskItem.style.opacity = '0';
+                    // Reset position first
+                    taskItem.style.transition = 'transform 0.3s ease, background-color 0.3s ease';
+                    taskItem.style.transform = 'translateX(0)';
+                    taskItem.style.backgroundColor = '';
 
-                    setTimeout(() => {
-                        tasks[tasks_dateKey] = tasks[tasks_dateKey].filter(t => t.id !== taskId);
-                        if (tasks[tasks_dateKey].length === 0 && tasks_dateKey !== 'someday') {
-                            delete tasks[tasks_dateKey];
-                        }
-                        saveTasksToStorage();
-                        renderWeek();
-                    }, 300);
+                    // Show confirmation dialog
+                    if (confirm('Are you sure you want to delete this task?')) {
+                        // Animate out
+                        taskItem.style.transition = 'transform 0.3s ease, opacity 0.3s ease';
+                        taskItem.style.transform = 'translateX(-100%)';
+                        taskItem.style.opacity = '0';
+
+                        setTimeout(() => {
+                            tasks[tasks_dateKey] = tasks[tasks_dateKey].filter(t => t.id !== taskId);
+                            if (tasks[tasks_dateKey].length === 0 && tasks_dateKey !== 'someday') {
+                                delete tasks[tasks_dateKey];
+                            }
+                            saveTasksToStorage();
+                            renderWeek();
+                        }, 300);
+                    }
                 } else if (swipeDirection === 'right') {
                     // Swipe right - mark complete/incomplete
                     if (navigator.vibrate) {

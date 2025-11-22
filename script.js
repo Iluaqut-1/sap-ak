@@ -1,5 +1,5 @@
 // State management
-let currentView = 'week'; // 'month', 'week', 'day'
+let currentView = 'week'; // 'month', 'week', 'day', 'payroll'
 let currentWeekOffset = 0;
 let currentMonthOffset = 0;
 let currentDayDate = null;
@@ -15,6 +15,18 @@ let customColors = [];
 // Calendar management
 let calendars = [];
 let currentCalendarId = null;
+
+// NEW FEATURES STATE
+let currentTagFilter = ''; // For tag filtering
+let payrollData = {}; // For 14-day payroll: { "2024-01-15": { hours: 8, notes: "..." } }
+let isTimeBlockMode = false; // Time block calendar mode
+let isFocusMode = false; // Focus mode state
+let appState = {
+    primaryTimezone: 'America/Godthab',
+    secondaryTimezone: 'Europe/Copenhagen',
+    showSecondaryTimezone: false
+};
+let lastOverdueCheck = null; // Track when we last showed overdue dialog
 
 // Internationalization
 const translations = {
@@ -345,6 +357,673 @@ function renderSharedTask(taskData) {
     modal.classList.add('active');
 }
 
+// ========================================
+// NEW FEATURES FUNCTIONS
+// ========================================
+
+// ===== TAGS FEATURE =====
+function handleTagsInput(e) {
+    if (e.key === 'Enter' || e.key === ' ' || e.key === ',') {
+        e.preventDefault();
+        const value = e.target.value.trim();
+        if (value) {
+            let tag = value.startsWith('#') ? value : '#' + value;
+            tag = tag.replace(/[,\s]/g, ''); // Remove spaces and commas
+            const { taskId, dateKey } = taskPopoverState;
+            const task = tasks[dateKey]?.find(t => t.id === taskId);
+            if (task) {
+                if (!task.tags) task.tags = [];
+                if (!task.tags.includes(tag) && tag.length > 1) {
+                    task.tags.push(tag);
+                    saveTasksToStorage();
+                    renderTags(task);
+                    e.target.value = '';
+                    updateTagFilter(); // Update tag filter dropdown
+                }
+            }
+        }
+    }
+}
+
+function renderTags(task) {
+    const tagsDisplay = document.getElementById('tagsDisplay');
+    if (!tagsDisplay) return;
+
+    if (!task.tags) task.tags = [];
+
+    tagsDisplay.innerHTML = task.tags.map(tag => `
+        <span class="tag-chip">
+            ${tag}
+            <span class="tag-chip-remove" onclick="removeTag('${tag.replace(/'/g, "\\'")}')" title="Remove tag">×</span>
+        </span>
+    `).join('');
+}
+
+function removeTag(tag) {
+    const { taskId, dateKey } = taskPopoverState;
+    const task = tasks[dateKey]?.find(t => t.id === taskId);
+    if (task && task.tags) {
+        task.tags = task.tags.filter(t => t !== tag);
+        saveTasksToStorage();
+        renderTags(task);
+        updateTagFilter();
+        renderCurrentView();
+    }
+}
+
+function getAllTags() {
+    const allTags = new Set();
+    Object.values(tasks).flat().forEach(task => {
+        if (task && task.tags) {
+            task.tags.forEach(tag => allTags.add(tag));
+        }
+    });
+    return Array.from(allTags).sort();
+}
+
+function updateTagFilter() {
+    const tagFilter = document.getElementById('tagFilter');
+    if (!tagFilter) return;
+
+    const allTags = getAllTags();
+    const currentValue = tagFilter.value;
+
+    tagFilter.innerHTML = '<option value="">All tasks</option>';
+    allTags.forEach(tag => {
+        const option = document.createElement('option');
+        option.value = tag;
+        option.textContent = tag;
+        tagFilter.appendChild(option);
+    });
+
+    // Restore selection if still valid
+    if (allTags.includes(currentValue)) {
+        tagFilter.value = currentValue;
+    }
+
+    // Show/hide tag filter container
+    const container = document.getElementById('tagFilterContainer');
+    if (container) {
+        container.style.display = allTags.length > 0 ? 'flex' : 'none';
+    }
+}
+
+function getFilteredTasks(dateKey) {
+    let dayTasks = tasks[dateKey] || [];
+    if (currentTagFilter) {
+        dayTasks = dayTasks.filter(t => t.tags && t.tags.includes(currentTagFilter));
+    }
+    return dayTasks;
+}
+
+// ===== LINKS FEATURE =====
+function addLink() {
+    const urlInput = document.getElementById('linkUrlInput');
+    const titleInput = document.getElementById('linkTitleInput');
+
+    const url = urlInput.value.trim();
+    const title = titleInput.value.trim();
+
+    if (!url) return;
+
+    // Basic URL validation
+    try {
+        new URL(url);
+    } catch {
+        alert('Please enter a valid URL');
+        return;
+    }
+
+    const { taskId, dateKey } = taskPopoverState;
+    const task = tasks[dateKey]?.find(t => t.id === taskId);
+
+    if (task) {
+        if (!task.links) task.links = [];
+        task.links.push({ url, title: title || url });
+        saveTasksToStorage();
+        renderLinks(task);
+
+        urlInput.value = '';
+        titleInput.value = '';
+    }
+}
+
+function renderLinks(task) {
+    const linksList = document.getElementById('linksList');
+    if (!linksList) return;
+
+    if (!task.links) task.links = [];
+
+    linksList.innerHTML = task.links.map((link, index) => `
+        <div class="link-item">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+            </svg>
+            <a href="${link.url}" target="_blank" rel="noopener noreferrer">${link.title || link.url}</a>
+            <button class="link-delete" onclick="removeLink(${index})" title="Remove link">×</button>
+        </div>
+    `).join('');
+}
+
+function removeLink(index) {
+    const { taskId, dateKey } = taskPopoverState;
+    const task = tasks[dateKey]?.find(t => t.id === taskId);
+
+    if (task && task.links) {
+        task.links.splice(index, 1);
+        saveTasksToStorage();
+        renderLinks(task);
+    }
+}
+
+// ===== TIME BLOCK FEATURE =====
+function saveTimeBlockToTask() {
+    const startTime = document.getElementById('startTimeInput').value;
+    const endTime = document.getElementById('endTimeInput').value;
+
+    const { taskId, dateKey } = taskPopoverState;
+    const task = tasks[dateKey]?.find(t => t.id === taskId);
+
+    if (task) {
+        task.startTime = startTime || null;
+        task.endTime = endTime || null;
+        saveTasksToStorage();
+        renderCurrentView();
+    }
+}
+
+function loadTimeBlockData(task) {
+    const startTimeInput = document.getElementById('startTimeInput');
+    const endTimeInput = document.getElementById('endTimeInput');
+
+    if (startTimeInput) startTimeInput.value = task.startTime || '';
+    if (endTimeInput) endTimeInput.value = task.endTime || '';
+}
+
+function toggleTimeBlockMode() {
+    isTimeBlockMode = !isTimeBlockMode;
+    localStorage.setItem('isTimeBlockMode', isTimeBlockMode);
+
+    const btn = document.getElementById('timeBlockModeBtn');
+    if (btn) {
+        btn.style.background = isTimeBlockMode ? '#818cf8' : '';
+        btn.style.color = isTimeBlockMode ? 'white' : '';
+    }
+
+    renderCurrentView();
+}
+
+function renderTimeBlockWeek() {
+    const container = document.getElementById('weekContainer');
+    container.classList.add('time-block-mode');
+    container.innerHTML = '';
+
+    const weekDays = getWeekDates(currentWeekOffset);
+
+    weekDays.forEach(day => {
+        const dateKey = formatDate(day);
+        const col = document.createElement('div');
+        col.className = `day-column time-block-mode ${isToday(day) ? 'today' : ''}`;
+        col.dataset.dateKey = dateKey;
+
+        // Day header
+        const header = document.createElement('div');
+        header.className = 'day-header';
+        header.innerHTML = `
+            <div class="day-name">${formatDayName(day)}</div>
+            <div class="day-date">${day.getDate()}</div>
+        `;
+        col.appendChild(header);
+
+        // Time grid (8am to 8pm for example)
+        const grid = document.createElement('div');
+        grid.className = 'time-grid';
+
+        // Draw hour lines and labels
+        for (let hour = 8; hour <= 20; hour++) {
+            const label = document.createElement('div');
+            label.className = 'time-label';
+            label.textContent = `${hour.toString().padStart(2, '0')}:00`;
+            label.style.top = `${(hour - 8) * 60}px`;
+
+            const line = document.createElement('div');
+            line.className = 'time-line';
+            line.style.top = `${(hour - 8) * 60}px`;
+
+            grid.appendChild(label);
+            grid.appendChild(line);
+        }
+
+        // Render time block tasks
+        const dayTasks = getFilteredTasks(dateKey);
+        dayTasks.forEach(task => {
+            if (task.startTime && task.endTime) {
+                const taskEl = createTimeBlockTaskElement(task, dateKey);
+                grid.appendChild(taskEl);
+            }
+        });
+
+        col.appendChild(grid);
+        container.appendChild(col);
+    });
+}
+
+function createTimeBlockTaskElement(task, dateKey) {
+    const el = document.createElement('div');
+    el.className = `time-block-task ${task.color || 'default'}`;
+    el.dataset.taskId = task.id;
+
+    // Calculate position from time
+    const [startHour, startMin] = task.startTime.split(':').map(Number);
+    const [endHour, endMin] = task.endTime.split(':').map(Number);
+
+    const startMinutes = (startHour - 8) * 60 + startMin;
+    const endMinutes = (endHour - 8) * 60 + endMin;
+    const duration = endMinutes - startMinutes;
+
+    el.style.top = `${startMinutes}px`;
+    el.style.height = `${Math.max(duration, 30)}px`; // Minimum height
+
+    // Format time display with timezone
+    const timeDisplay = formatTimeWithTimezone(task.startTime, task.endTime, dateKey);
+
+    el.innerHTML = `
+        <div class="time-block-time">${timeDisplay}</div>
+        <div class="time-block-text">${task.text}</div>
+    `;
+
+    el.onclick = () => {
+        const taskElement = el;
+        openTaskPopover(task.id, dateKey, taskElement);
+    };
+
+    // Apply task color
+    if (task.color) {
+        el.setAttribute('data-color', task.color);
+    }
+
+    return el;
+}
+
+function formatTimeWithTimezone(startTime, endTime, dateKey) {
+    if (!appState.showSecondaryTimezone) {
+        return `${startTime} - ${endTime}`;
+    }
+
+    // Create date with times
+    const startDate = new Date(`${dateKey}T${startTime}:00`);
+    const endDate = new Date(`${dateKey}T${endTime}:00`);
+
+    const primaryStart = formatTimeInTimezone(startDate, appState.primaryTimezone);
+    const primaryEnd = formatTimeInTimezone(endDate, appState.primaryTimezone);
+    const secondaryStart = formatTimeInTimezone(startDate, appState.secondaryTimezone);
+    const secondaryEnd = formatTimeInTimezone(endDate, appState.secondaryTimezone);
+
+    return `${primaryStart}-${primaryEnd} / ${secondaryStart}-${secondaryEnd}`;
+}
+
+function formatTimeInTimezone(date, timezone) {
+    try {
+        return new Intl.DateTimeFormat('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZone: timezone,
+            hour12: false
+        }).format(date);
+    } catch (e) {
+        // Fallback if timezone is invalid
+        return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+    }
+}
+
+// ===== PAYROLL VIEW (14-DAY) =====
+function renderPayrollView() {
+    const weekContainer = document.getElementById('weekContainer');
+    const payrollView = document.getElementById('payrollView');
+
+    weekContainer.style.display = 'none';
+    payrollView.style.display = 'block';
+    payrollView.innerHTML = '';
+
+    const days = get14DayRange(currentWeekOffset);
+
+    // Week 1
+    const week1Container = document.createElement('div');
+    week1Container.className = 'payroll-container week-1';
+    days.slice(0, 7).forEach(day => {
+        week1Container.appendChild(createPayrollDay(day));
+    });
+    payrollView.appendChild(week1Container);
+
+    // Week 2
+    const week2Container = document.createElement('div');
+    week2Container.className = 'payroll-container week-2';
+    days.slice(7, 14).forEach(day => {
+        week2Container.appendChild(createPayrollDay(day));
+    });
+    payrollView.appendChild(week2Container);
+}
+
+function createPayrollDay(day) {
+    const el = document.createElement('div');
+    el.className = 'payroll-day';
+    el.dataset.dateKey = day.dateKey;
+
+    const data = payrollData[day.dateKey] || { hours: '', notes: '' };
+
+    el.innerHTML = `
+        <div class="payroll-day-header">
+            ${day.dayName} ${day.date}
+        </div>
+        <input type="number"
+               class="payroll-hours-input"
+               placeholder="Hours"
+               step="0.5"
+               min="0"
+               max="24"
+               data-date="${day.dateKey}"
+               value="${data.hours || ''}">
+        <div class="payroll-notes">
+            <textarea placeholder="Notes..."
+                      data-date="${day.dateKey}"
+                      class="payroll-notes-input">${data.notes || ''}</textarea>
+        </div>
+    `;
+
+    // Save on blur
+    const hoursInput = el.querySelector('.payroll-hours-input');
+    const notesInput = el.querySelector('.payroll-notes-input');
+
+    hoursInput.addEventListener('blur', savePayrollData);
+    notesInput.addEventListener('blur', savePayrollData);
+
+    return el;
+}
+
+function get14DayRange(offset) {
+    const days = [];
+    const today = new Date();
+    const startOfPeriod = new Date(today);
+    startOfPeriod.setDate(today.getDate() - today.getDay() + (offset * 14));
+
+    for (let i = 0; i < 14; i++) {
+        const day = new Date(startOfPeriod);
+        day.setDate(startOfPeriod.getDate() + i);
+        days.push({
+            date: day.getDate(),
+            dayName: formatDayName(day),
+            dateKey: formatDate(day),
+            fullDate: new Date(day)
+        });
+    }
+
+    return days;
+}
+
+function savePayrollData() {
+    // Collect all inputs
+    document.querySelectorAll('.payroll-hours-input').forEach(input => {
+        const date = input.dataset.date;
+        if (!payrollData[date]) payrollData[date] = {};
+        payrollData[date].hours = parseFloat(input.value) || 0;
+    });
+
+    document.querySelectorAll('.payroll-notes-input').forEach(input => {
+        const date = input.dataset.date;
+        if (!payrollData[date]) payrollData[date] = {};
+        payrollData[date].notes = input.value;
+    });
+
+    localStorage.setItem('weeklyPlannerPayroll', JSON.stringify(payrollData));
+}
+
+function loadPayrollFromStorage() {
+    const stored = localStorage.getItem('weeklyPlannerPayroll');
+    if (stored) {
+        try {
+            payrollData = JSON.parse(stored);
+        } catch (e) {
+            console.error('Error loading payroll data:', e);
+            payrollData = {};
+        }
+    }
+}
+
+// ===== OVERDUE TASKS NUDGE =====
+function checkOverdueTasks() {
+    // Check if we already showed overdue dialog today
+    const today = formatDate(new Date());
+    if (lastOverdueCheck === today) {
+        return; // Already checked today
+    }
+
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+
+    const overdueTasks = [];
+
+    Object.keys(tasks).forEach(dateKey => {
+        if (dateKey === 'someday') return;
+
+        const taskDate = new Date(dateKey);
+        taskDate.setHours(0, 0, 0, 0);
+
+        if (taskDate < todayDate) {
+            tasks[dateKey].forEach(task => {
+                if (!task.completed) {
+                    overdueTasks.push({ task, dateKey });
+                }
+            });
+        }
+    });
+
+    if (overdueTasks.length > 0) {
+        showOverdueDialog(overdueTasks);
+    }
+}
+
+function showOverdueDialog(overdueTasks) {
+    const modal = document.getElementById('overdueModal');
+    const body = document.getElementById('overdueBody');
+
+    body.innerHTML = overdueTasks.map(({ task, dateKey }) => `
+        <div class="overdue-task-item" data-task-id="${task.id}" data-date-key="${dateKey}">
+            <div>
+                <div class="overdue-task-text">${task.text}</div>
+                <div class="overdue-task-date">From: ${dateKey}</div>
+            </div>
+            <button class="push-tomorrow-btn" onclick="pushTaskToTomorrow('${task.id}', '${dateKey}')">
+                Push to tomorrow
+            </button>
+        </div>
+    `).join('');
+
+    modal.classList.add('active');
+}
+
+function pushTaskToTomorrow(taskId, oldDateKey) {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowKey = formatDate(tomorrow);
+
+    // Find task
+    const taskIndex = tasks[oldDateKey]?.findIndex(t => t.id === taskId);
+    if (taskIndex === -1 || taskIndex === undefined) return;
+
+    const task = tasks[oldDateKey][taskIndex];
+
+    // Move to tomorrow
+    if (!tasks[tomorrowKey]) tasks[tomorrowKey] = [];
+    tasks[tomorrowKey].push(task);
+
+    // Remove from old date
+    tasks[oldDateKey].splice(taskIndex, 1);
+    if (tasks[oldDateKey].length === 0) {
+        delete tasks[oldDateKey];
+    }
+
+    saveTasksToStorage();
+
+    // Remove from UI
+    const item = document.querySelector(`.overdue-task-item[data-task-id="${taskId}"]`);
+    if (item) item.remove();
+
+    // Close modal if no more overdue
+    if (document.querySelectorAll('.overdue-task-item').length === 0) {
+        closeOverdueModal();
+    }
+
+    renderCurrentView();
+}
+
+function closeOverdueModal() {
+    const modal = document.getElementById('overdueModal');
+    modal.classList.remove('active');
+
+    // Mark that we checked today
+    lastOverdueCheck = formatDate(new Date());
+    localStorage.setItem('lastOverdueCheck', lastOverdueCheck);
+}
+
+function dismissOverdueForToday() {
+    closeOverdueModal();
+}
+
+// ===== WORKLOAD HEATMAP =====
+function renderWorkloadHeatmap() {
+    const container = document.getElementById('heatmapDays');
+    const heatmapContainer = document.getElementById('workloadHeatmap');
+
+    if (!container || !heatmapContainer) return;
+
+    // Only show for week view
+    if (currentView !== 'week') {
+        heatmapContainer.style.display = 'none';
+        return;
+    }
+
+    heatmapContainer.style.display = 'flex';
+
+    const weekDays = getWeekDates(currentWeekOffset);
+
+    container.innerHTML = weekDays.map(day => {
+        const dateKey = formatDate(day);
+        const dayTasks = tasks[dateKey] || [];
+        const count = dayTasks.length;
+
+        // Calculate intensity (0-5) - edge case handling
+        let intensity = 0;
+        if (count > 0) intensity = 1;
+        if (count > 3) intensity = 2;
+        if (count > 5) intensity = 3;
+        if (count > 8) intensity = 4;
+        if (count > 12) intensity = 5;
+
+        return `
+            <div class="heatmap-day intensity-${intensity}"
+                 data-date="${dateKey}"
+                 onclick="jumpToDate('${dateKey}')"
+                 title="${count} task${count !== 1 ? 's' : ''}">
+                <div class="heatmap-day-name">${formatDayName(day).slice(0, 3)}</div>
+                <div class="heatmap-day-count">${count}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+function jumpToDate(dateKey) {
+    // Could implement scroll to specific day
+    console.log('Jump to', dateKey);
+}
+
+// ===== FOCUS MODE =====
+function toggleFocusMode() {
+    isFocusMode = !isFocusMode;
+    document.body.classList.toggle('focus-mode', isFocusMode);
+    localStorage.setItem('isFocusMode', isFocusMode);
+
+    const btn = document.getElementById('focusModeBtn');
+    if (btn) {
+        btn.style.background = isFocusMode ? '#818cf8' : '';
+        btn.style.color = isFocusMode ? 'white' : '';
+    }
+
+    renderCurrentView();
+}
+
+function loadFocusModeState() {
+    const stored = localStorage.getItem('isFocusMode');
+    if (stored === 'true') {
+        isFocusMode = true;
+        document.body.classList.add('focus-mode');
+        const btn = document.getElementById('focusModeBtn');
+        if (btn) {
+            btn.style.background = '#818cf8';
+            btn.style.color = 'white';
+        }
+    }
+}
+
+function toggleDarkMode() {
+    const isDark = document.body.classList.contains('theme-dark');
+    const newTheme = isDark ? 'default' : 'dark';
+    setTheme(newTheme);
+}
+
+// ===== TIMEZONE SUPPORT =====
+function loadTimezoneSettings() {
+    const primaryTZ = localStorage.getItem('primaryTimezone');
+    const secondaryTZ = localStorage.getItem('secondaryTimezone');
+    const showSecondary = localStorage.getItem('showSecondaryTimezone') === 'true';
+
+    if (primaryTZ) {
+        appState.primaryTimezone = primaryTZ;
+        const select = document.getElementById('primaryTimezone');
+        if (select) select.value = primaryTZ;
+    }
+
+    if (secondaryTZ) {
+        appState.secondaryTimezone = secondaryTZ;
+        const select = document.getElementById('secondaryTimezone');
+        if (select) select.value = secondaryTZ;
+    }
+
+    appState.showSecondaryTimezone = showSecondary;
+    const checkbox = document.getElementById('showSecondaryTimezone');
+    if (checkbox) {
+        checkbox.checked = showSecondary;
+        document.getElementById('secondaryTimezone').disabled = !showSecondary;
+    }
+}
+
+// ===== UNIFIED RENDER FUNCTION =====
+function renderCurrentView() {
+    // Hide all views first
+    document.getElementById('monthContainer').style.display = 'none';
+    document.getElementById('weekContainer').style.display = 'none';
+    document.getElementById('payrollView').style.display = 'none';
+    document.getElementById('dayContainer').style.display = 'none';
+
+    // Render based on current view
+    if (currentView === 'payroll') {
+        renderPayrollView();
+    } else if (currentView === 'week') {
+        document.getElementById('weekContainer').style.display = '';
+        if (isTimeBlockMode) {
+            renderTimeBlockWeek();
+        } else {
+            renderWeek();
+        }
+        renderWorkloadHeatmap();
+    } else {
+        // Fallback to existing render logic
+        renderWeek(); // or renderMonth(), renderDay() depending on currentView
+    }
+
+    updateTagFilter();
+}
+
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
     loadCalendarsFromStorage(); // Load calendars (which loads tasks internally)
@@ -352,6 +1031,29 @@ document.addEventListener('DOMContentLoaded', () => {
     loadViewFromStorage();
     loadCustomColors();
     loadThemeFromStorage(); // Load saved theme
+
+    // Load new features state
+    loadPayrollFromStorage();
+    loadTimezoneSettings();
+    loadFocusModeState();
+
+    // Load last overdue check
+    const storedLastCheck = localStorage.getItem('lastOverdueCheck');
+    if (storedLastCheck) {
+        lastOverdueCheck = storedLastCheck;
+    }
+
+    // Load time block mode state
+    const storedTimeBlockMode = localStorage.getItem('isTimeBlockMode');
+    if (storedTimeBlockMode === 'true') {
+        isTimeBlockMode = true;
+        const btn = document.getElementById('timeBlockModeBtn');
+        if (btn) {
+            btn.style.background = '#818cf8';
+            btn.style.color = 'white';
+        }
+    }
+
     updateTranslations();
     setupEventListeners();
     renderCalendarList(); // Render calendar selector
@@ -864,6 +1566,17 @@ function openTaskPopover(taskId, dateKey, taskElement) {
 
     // Load reminder data
     loadReminderData(task);
+
+    // Load tags, links, and time block data (NEW FEATURES)
+    renderTags(task);
+    renderLinks(task);
+    loadTimeBlockData(task);
+
+    // Show/hide time block section based on mode
+    const timeBlockSection = document.getElementById('timeBlockSection');
+    if (timeBlockSection) {
+        timeBlockSection.style.display = isTimeBlockMode ? 'block' : 'none';
+    }
 
     // Position popover near the task
     const rect = taskElement.getBoundingClientRect();
@@ -2427,10 +3140,11 @@ function switchView(view) {
     document.getElementById('monthContainer').style.display = 'none';
     document.getElementById('weekContainer').style.display = 'none';
     document.getElementById('dayContainer').style.display = 'none';
+    document.getElementById('payrollView').style.display = 'none';
 
     // Show/hide someday based on view
     const somedaySection = document.getElementById('somedaySection');
-    somedaySection.style.display = view === 'day' ? 'none' : 'block';
+    somedaySection.style.display = (view === 'day' || view === 'payroll') ? 'none' : 'block';
 
     // Update view buttons
     document.querySelectorAll('.view-btn').forEach(btn => {
@@ -2446,11 +3160,13 @@ function switchView(view) {
         renderMonth();
     } else if (view === 'week') {
         document.getElementById('weekContainer').style.display = 'block';
-        renderWeek();
+        renderCurrentView(); // Use unified render for week view
         renderSomedayTasks();
     } else if (view === 'day') {
         document.getElementById('dayContainer').style.display = 'block';
         renderDay();
+    } else if (view === 'payroll') {
+        renderPayrollView();
     }
 }
 
@@ -2461,12 +3177,15 @@ function navigate(direction) {
         renderMonth();
     } else if (currentView === 'week') {
         currentWeekOffset += direction;
-        renderWeek();
+        renderCurrentView(); // Use unified render
     } else if (currentView === 'day') {
         const currentDate = new Date(currentDayDate + 'T00:00:00');
         currentDate.setDate(currentDate.getDate() + direction);
         currentDayDate = formatDate(currentDate);
         renderDay();
+    } else if (currentView === 'payroll') {
+        currentWeekOffset += direction;
+        renderPayrollView();
     }
 }
 
@@ -3369,6 +4088,99 @@ function setupEventListeners() {
         }
     });
 
+    // ===== NEW FEATURES INITIALIZATION =====
+
+    // Tags feature event listeners
+    const tagsInput = document.getElementById('tagsInput');
+    if (tagsInput) {
+        tagsInput.addEventListener('keydown', handleTagsInput);
+    }
+
+    const addLinkBtn = document.getElementById('addLinkBtn');
+    if (addLinkBtn) {
+        addLinkBtn.addEventListener('click', addLink);
+    }
+
+    // Time block inputs
+    const startTimeInput = document.getElementById('startTimeInput');
+    const endTimeInput = document.getElementById('endTimeInput');
+    if (startTimeInput) startTimeInput.addEventListener('change', saveTimeBlockToTask);
+    if (endTimeInput) endTimeInput.addEventListener('change', saveTimeBlockToTask);
+
+    // Time block mode toggle
+    const timeBlockModeBtn = document.getElementById('timeBlockModeBtn');
+    if (timeBlockModeBtn) {
+        timeBlockModeBtn.addEventListener('click', toggleTimeBlockMode);
+    }
+
+    // Focus mode toggle
+    const focusModeBtn = document.getElementById('focusModeBtn');
+    if (focusModeBtn) {
+        focusModeBtn.addEventListener('click', toggleFocusMode);
+    }
+
+    // Dark mode toggle
+    const darkModeToggle = document.getElementById('darkModeToggle');
+    if (darkModeToggle) {
+        darkModeToggle.addEventListener('click', toggleDarkMode);
+    }
+
+    // Tag filter
+    const tagFilter = document.getElementById('tagFilter');
+    if (tagFilter) {
+        tagFilter.addEventListener('change', (e) => {
+            currentTagFilter = e.target.value;
+            renderCurrentView();
+        });
+    }
+
+    // Timezone selectors
+    const primaryTimezone = document.getElementById('primaryTimezone');
+    const secondaryTimezone = document.getElementById('secondaryTimezone');
+    const showSecondaryTimezone = document.getElementById('showSecondaryTimezone');
+
+    if (primaryTimezone) {
+        primaryTimezone.addEventListener('change', (e) => {
+            appState.primaryTimezone = e.target.value;
+            localStorage.setItem('primaryTimezone', e.target.value);
+            renderCurrentView();
+        });
+    }
+
+    if (secondaryTimezone) {
+        secondaryTimezone.addEventListener('change', (e) => {
+            appState.secondaryTimezone = e.target.value;
+            localStorage.setItem('secondaryTimezone', e.target.value);
+            renderCurrentView();
+        });
+    }
+
+    if (showSecondaryTimezone) {
+        showSecondaryTimezone.addEventListener('change', (e) => {
+            appState.showSecondaryTimezone = e.target.checked;
+            document.getElementById('secondaryTimezone').disabled = !e.target.checked;
+            localStorage.setItem('showSecondaryTimezone', e.target.checked);
+            renderCurrentView();
+        });
+    }
+
+    // Overdue modal
+    const closeOverdueBtn = document.getElementById('closeOverdueBtn');
+    const dismissOverdueBtn = document.getElementById('dismissOverdueBtn');
+    if (closeOverdueBtn) {
+        closeOverdueBtn.addEventListener('click', closeOverdueModal);
+    }
+    if (dismissOverdueBtn) {
+        dismissOverdueBtn.addEventListener('click', dismissOverdueForToday);
+    }
+
+    // Check for overdue tasks on load
+    checkOverdueTasks();
+
+    // Load initial states
+    loadTimezoneSettings();
+    loadFocusModeState();
+
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
@@ -3379,6 +4191,7 @@ function setupEventListeners() {
             closeSearch();
             closeSharedTaskModal();
             closeCalendarSyncModal();
+            closeOverdueModal();
             // Close calendar dropdown
             if (calendarDropdown) {
                 calendarDropdown.classList.remove('active');

@@ -2862,11 +2862,21 @@ function handleShare() {
     }
 }
 
-// Calendar sync functions (iCalendar export/import)
-function exportCalendarToICS() {
+// Calendar sync functions - Seamless integration
+function openCalendarSyncModal() {
     closeMenu();
+    const modal = document.getElementById('calendarSyncModal');
+    modal.classList.add('active');
+}
+
+function closeCalendarSyncModal() {
+    const modal = document.getElementById('calendarSyncModal');
+    modal.classList.remove('active');
+}
+
+function generateICSContent() {
     const currentCalendar = calendars.find(c => c.id === currentCalendarId);
-    if (!currentCalendar) return;
+    if (!currentCalendar) return '';
 
     // Build iCalendar file content
     let icsContent = [
@@ -2884,7 +2894,10 @@ function exportCalendarToICS() {
         const tasksForDate = currentCalendar.tasks[dateKey] || [];
         tasksForDate.forEach(task => {
             const date = new Date(dateKey);
-            const dateStr = date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const dateStr = `${year}${month}${day}`;
 
             // Create unique ID for event
             const uid = `task-${task.id}@weeklyplanner`;
@@ -2904,9 +2917,9 @@ function exportCalendarToICS() {
             icsContent.push(
                 'BEGIN:VEVENT',
                 `UID:${uid}`,
-                `DTSTAMP:${dateStr}`,
-                `DTSTART;VALUE=DATE:${dateStr.split('T')[0]}`,
-                `SUMMARY:${task.text || 'Untitled Task'}`,
+                `DTSTAMP:${dateStr}T120000Z`,
+                `DTSTART;VALUE=DATE:${dateStr}`,
+                `SUMMARY:${(task.text || 'Untitled Task').replace(/\n/g, ' ')}`,
                 `DESCRIPTION:${description}`,
                 `STATUS:${task.completed ? 'COMPLETED' : 'NEEDS-ACTION'}`,
                 task.color ? `CATEGORIES:${task.color}` : '',
@@ -2916,118 +2929,113 @@ function exportCalendarToICS() {
     });
 
     icsContent.push('END:VCALENDAR');
+    return icsContent.join('\r\n');
+}
 
-    // Create downloadable file
-    const blob = new Blob([icsContent.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+function addToGoogleCalendar() {
+    const icsContent = generateICSContent();
+
+    // Create blob and download
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${currentCalendar.name.replace(/\s+/g, '_')}.ics`;
+    const currentCalendar = calendars.find(c => c.id === currentCalendarId);
+    link.download = `${(currentCalendar?.name || 'calendar').replace(/\s+/g, '_')}.ics`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+
+    closeCalendarSyncModal();
+
+    // Show instructions
+    setTimeout(() => {
+        alert('Calendar file downloaded!\n\nTo add to Google Calendar:\n1. Open Google Calendar (calendar.google.com)\n2. Click the "+" next to "Other calendars"\n3. Select "Import"\n4. Choose the downloaded .ics file\n5. Click "Import"');
+    }, 500);
 }
 
-function importCalendarFromICS() {
-    closeMenu();
+function addToAppleCalendar() {
+    const icsContent = generateICSContent();
 
-    // Create file input
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.ics,.ical';
+    // Create blob
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
 
-    input.onchange = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            try {
-                parseICSFile(event.target.result);
-                alert('Calendar imported successfully!');
-            } catch (error) {
-                console.error('Error parsing ICS file:', error);
-                alert('Failed to import calendar. Please check the file format.');
-            }
-        };
-        reader.readAsText(file);
-    };
-
-    input.click();
-}
-
-function parseICSFile(icsContent) {
-    const lines = icsContent.split(/\r?\n/);
-    let inEvent = false;
-    let currentEvent = {};
-    let importedTasks = {};
-
-    lines.forEach(line => {
-        line = line.trim();
-
-        if (line === 'BEGIN:VEVENT') {
-            inEvent = true;
-            currentEvent = {};
-        } else if (line === 'END:VEVENT' && inEvent) {
-            inEvent = false;
-
-            // Convert event to task
-            if (currentEvent.dtstart && currentEvent.summary) {
-                const dateKey = currentEvent.dtstart;
-
-                if (!importedTasks[dateKey]) {
-                    importedTasks[dateKey] = [];
-                }
-
-                const task = {
-                    id: 'task-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
-                    text: currentEvent.summary,
-                    completed: currentEvent.status === 'COMPLETED',
-                    color: currentEvent.categories || 'default',
-                    notes: currentEvent.description || '',
-                    subtasks: []
-                };
-
-                importedTasks[dateKey].push(task);
-            }
-        } else if (inEvent) {
-            // Parse event properties
-            if (line.startsWith('DTSTART')) {
-                const match = line.match(/DTSTART[^:]*:(\d{8})/);
-                if (match) {
-                    const dateStr = match[1];
-                    const year = dateStr.substr(0, 4);
-                    const month = dateStr.substr(4, 2);
-                    const day = dateStr.substr(6, 2);
-                    currentEvent.dtstart = `${year}-${month}-${day}`;
-                }
-            } else if (line.startsWith('SUMMARY:')) {
-                currentEvent.summary = line.substring(8).replace(/\\n/g, '\n');
-            } else if (line.startsWith('DESCRIPTION:')) {
-                currentEvent.description = line.substring(12).replace(/\\n/g, '\n');
-            } else if (line.startsWith('STATUS:')) {
-                currentEvent.status = line.substring(7);
-            } else if (line.startsWith('CATEGORIES:')) {
-                currentEvent.categories = line.substring(11);
-            }
-        }
-    });
-
-    // Merge imported tasks with current calendar
+    // Create link
+    const link = document.createElement('a');
     const currentCalendar = calendars.find(c => c.id === currentCalendarId);
-    if (currentCalendar) {
-        Object.keys(importedTasks).forEach(dateKey => {
-            if (!currentCalendar.tasks[dateKey]) {
-                currentCalendar.tasks[dateKey] = [];
-            }
-            currentCalendar.tasks[dateKey].push(...importedTasks[dateKey]);
-        });
+    const fileName = `${(currentCalendar?.name || 'calendar').replace(/\s+/g, '_')}.ics`;
 
-        tasks = currentCalendar.tasks;
-        saveCalendarsToStorage();
-        switchView(currentView); // Refresh view
-    }
+    // Download the file
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    closeCalendarSyncModal();
+
+    // Show platform-specific instructions
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isMac = /Mac/.test(navigator.platform);
+
+    setTimeout(() => {
+        if (isIOS) {
+            alert('Calendar file downloaded!\n\nTo add to Apple Calendar on iOS:\n1. Tap the downloaded .ics file\n2. Tap "Add All" to add events to your calendar\n3. Events will appear in your default calendar');
+        } else if (isMac) {
+            alert('Calendar file downloaded!\n\nTo add to Apple Calendar on Mac:\n1. Double-click the downloaded .ics file\n2. Calendar app will open automatically\n3. Click "Add" to import the events');
+        } else {
+            alert('Calendar file downloaded!\n\nTo add to Apple Calendar:\n1. Open the downloaded .ics file\n2. Your calendar app will open automatically\n3. Click "Add" or "Import" to add the events');
+        }
+    }, 500);
+}
+
+function addToOutlookCalendar() {
+    const icsContent = generateICSContent();
+
+    // Create blob and download
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const currentCalendar = calendars.find(c => c.id === currentCalendarId);
+    link.download = `${(currentCalendar?.name || 'calendar').replace(/\s+/g, '_')}.ics`;
+    link.href = url;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    closeCalendarSyncModal();
+
+    // Show instructions
+    setTimeout(() => {
+        alert('Calendar file downloaded!\n\nTo add to Outlook Calendar:\n\nDesktop:\n1. Open Outlook\n2. Go to File > Open & Export > Import/Export\n3. Select "Import an iCalendar (.ics) file"\n4. Choose the downloaded file\n\nOutlook.com:\n1. Open Outlook.com\n2. Click Calendar\n3. Click "Add calendar" > "Upload from file"\n4. Choose the downloaded file');
+    }, 500);
+}
+
+function addToOtherCalendar() {
+    const icsContent = generateICSContent();
+
+    // Create blob and download
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const currentCalendar = calendars.find(c => c.id === currentCalendarId);
+    link.download = `${(currentCalendar?.name || 'calendar').replace(/\s+/g, '_')}.ics`;
+    link.href = url;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    closeCalendarSyncModal();
+
+    // Show instructions
+    setTimeout(() => {
+        alert('Calendar file downloaded!\n\nThis .ics file works with most calendar apps including:\n- Google Calendar\n- Apple Calendar\n- Outlook\n- Yahoo Calendar\n- Thunderbird\n\nSimply import the file in your calendar app\'s import/add calendar feature.');
+    }, 500);
 }
 
 function openSupportModal() {
@@ -3231,8 +3239,21 @@ function setupEventListeners() {
     document.getElementById('printBtn').addEventListener('click', handlePrint);
     document.getElementById('shareBtn').addEventListener('click', handleShare);
     document.getElementById('supportBtn').addEventListener('click', openSupportModal);
-    document.getElementById('exportCalendarBtn').addEventListener('click', exportCalendarToICS);
-    document.getElementById('importCalendarBtn').addEventListener('click', importCalendarFromICS);
+
+    // Calendar sync modal
+    document.getElementById('addToCalendarBtn').addEventListener('click', openCalendarSyncModal);
+    document.getElementById('closeCalendarSyncBtn').addEventListener('click', closeCalendarSyncModal);
+    document.getElementById('calendarSyncModal').addEventListener('click', (e) => {
+        if (e.target.id === 'calendarSyncModal') {
+            closeCalendarSyncModal();
+        }
+    });
+
+    // Platform-specific calendar buttons
+    document.getElementById('addToGoogleBtn').addEventListener('click', addToGoogleCalendar);
+    document.getElementById('addToAppleBtn').addEventListener('click', addToAppleCalendar);
+    document.getElementById('addToOutlookBtn').addEventListener('click', addToOutlookCalendar);
+    document.getElementById('addToOtherBtn').addEventListener('click', addToOtherCalendar);
 
     document.getElementById('languageSelect').addEventListener('change', (e) => {
         changeLanguage(e.target.value);
@@ -3357,6 +3378,7 @@ function setupEventListeners() {
             closeTaskPopover();
             closeSearch();
             closeSharedTaskModal();
+            closeCalendarSyncModal();
             // Close calendar dropdown
             if (calendarDropdown) {
                 calendarDropdown.classList.remove('active');

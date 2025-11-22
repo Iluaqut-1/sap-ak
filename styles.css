@@ -1270,6 +1270,133 @@ body {
     font-size: 12px;
 }
 
+/* Calendar Sync Modal */
+.calendar-sync-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.4);
+    z-index: 1100;
+    align-items: center;
+    justify-content: center;
+}
+
+.calendar-sync-modal.active {
+    display: flex;
+}
+
+.calendar-sync-content {
+    background-color: var(--bg-primary);
+    border-radius: 16px;
+    max-width: 600px;
+    width: 90%;
+    max-height: 85vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.calendar-sync-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px 28px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.calendar-sync-header h2 {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.calendar-sync-body {
+    padding: 24px 28px;
+}
+
+.calendar-sync-description {
+    color: var(--text-secondary);
+    margin-bottom: 24px;
+    font-size: 15px;
+    line-height: 1.6;
+}
+
+.calendar-app-options {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.calendar-app-btn {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px;
+    background-color: var(--bg-secondary);
+    border: 2px solid var(--border-color);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+    width: 100%;
+}
+
+.calendar-app-btn:hover {
+    background-color: var(--bg-tertiary);
+    border-color: var(--accent-primary);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.calendar-app-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.google-icon {
+    background: linear-gradient(135deg, #4285f4, #34a853);
+    color: white;
+}
+
+.apple-icon {
+    background: linear-gradient(135deg, #000000, #333333);
+    color: white;
+}
+
+.outlook-icon {
+    background: linear-gradient(135deg, #0078d4, #00bcf2);
+    color: white;
+}
+
+.other-icon {
+    background: linear-gradient(135deg, #818cf8, #a78bfa);
+    color: white;
+}
+
+.calendar-app-info {
+    flex: 1;
+}
+
+.calendar-app-info h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 4px 0;
+}
+
+.calendar-app-info p {
+    font-size: 14px;
+    color: var(--text-tertiary);
+    margin: 0;
+}
+
 /* Color picker modal */
 .color-picker-modal {
     display: none;

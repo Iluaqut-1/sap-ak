@@ -156,6 +156,191 @@ function loadViewFromStorage() {
     }
 }
 
+// Share Task Functions
+function shareTask() {
+    const { taskId, dateKey } = taskPopoverState;
+    if (!taskId || !dateKey) return;
+
+    const task = tasks[dateKey]?.find(t => t.id === taskId);
+    if (!task) return;
+
+    // Create task data object
+    const taskData = {
+        text: task.text,
+        color: task.color || 'default',
+        notes: task.notes || '',
+        subtasks: task.subtasks || [],
+        date: dateKey,
+        completed: task.completed || false
+    };
+
+    // Encode task data to base64
+    const jsonString = JSON.stringify(taskData);
+    const base64Data = btoa(encodeURIComponent(jsonString));
+
+    // Create shareable URL
+    const shareUrl = `${window.location.origin}${window.location.pathname}?task=${base64Data}`;
+
+    // Open share modal
+    openSharedTaskModal(task, shareUrl);
+}
+
+function openSharedTaskModal(task, shareUrl) {
+    const modal = document.getElementById('sharedTaskModal');
+    const body = document.getElementById('sharedTaskBody');
+
+    // Render share UI with link
+    body.innerHTML = `
+        <div class="shared-task-item">
+            <div class="shared-task-title">${task.text}</div>
+            ${task.notes ? `
+                <div class="shared-task-notes">
+                    <div class="shared-task-notes-title">Notes</div>
+                    ${task.notes}
+                </div>
+            ` : ''}
+            ${task.subtasks && task.subtasks.length > 0 ? `
+                <div class="shared-task-subtasks">
+                    <div class="shared-task-subtasks-title">Subtasks (${task.subtasks.filter(st => st.completed).length}/${task.subtasks.length})</div>
+                    ${task.subtasks.map(subtask => `
+                        <div class="shared-subtask-item ${subtask.completed ? 'completed' : ''}">
+                            <div class="shared-subtask-checkbox ${subtask.completed ? 'checked' : ''}"></div>
+                            <span>${subtask.text}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            ` : ''}
+        </div>
+        <div class="share-actions">
+            <input type="text" class="share-link-input" value="${shareUrl}" readonly id="shareLinkInput">
+            <button class="copy-link-btn" id="copyLinkBtn">Copy Link</button>
+        </div>
+    `;
+
+    modal.classList.add('active');
+
+    // Add event listener for copy button
+    document.getElementById('copyLinkBtn').addEventListener('click', () => copyShareLink(shareUrl));
+
+    // Select the link input for easy copying
+    document.getElementById('shareLinkInput').select();
+}
+
+function closeSharedTaskModal() {
+    const modal = document.getElementById('sharedTaskModal');
+    modal.classList.remove('active');
+}
+
+function copyShareLink(url) {
+    const input = document.getElementById('shareLinkInput');
+    input.select();
+    input.setSelectionRange(0, 99999); // For mobile devices
+
+    try {
+        navigator.clipboard.writeText(url).then(() => {
+            const btn = document.getElementById('copyLinkBtn');
+            btn.textContent = 'Copied!';
+            btn.classList.add('copied');
+
+            setTimeout(() => {
+                btn.textContent = 'Copy Link';
+                btn.classList.remove('copied');
+            }, 2000);
+        }).catch(() => {
+            // Fallback for older browsers
+            document.execCommand('copy');
+            const btn = document.getElementById('copyLinkBtn');
+            btn.textContent = 'Copied!';
+            btn.classList.add('copied');
+
+            setTimeout(() => {
+                btn.textContent = 'Copy Link';
+                btn.classList.remove('copied');
+            }, 2000);
+        });
+    } catch (err) {
+        console.error('Failed to copy link:', err);
+    }
+}
+
+function loadSharedTaskFromURL() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const taskParam = urlParams.get('task');
+
+    if (!taskParam) return;
+
+    try {
+        // Decode base64 to JSON
+        const jsonString = decodeURIComponent(atob(taskParam));
+        const taskData = JSON.parse(jsonString);
+
+        // Render shared task in modal
+        renderSharedTask(taskData);
+    } catch (err) {
+        console.error('Failed to load shared task:', err);
+    }
+}
+
+function renderSharedTask(taskData) {
+    const modal = document.getElementById('sharedTaskModal');
+    const body = document.getElementById('sharedTaskBody');
+
+    // Get color for display
+    const colorStyle = taskData.color && taskData.color !== 'default'
+        ? `background-color: ${taskData.color}; width: 100%; height: 4px; border-radius: 2px; margin-bottom: 12px;`
+        : '';
+
+    body.innerHTML = `
+        <div class="shared-task-item">
+            ${colorStyle ? `<div style="${colorStyle}"></div>` : ''}
+            <div class="shared-task-title">${taskData.text}</div>
+            <div class="shared-task-meta">
+                ${taskData.date ? `
+                    <div class="shared-task-meta-item">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="16" y1="2" x2="16" y2="6"></line>
+                            <line x1="8" y1="2" x2="8" y2="6"></line>
+                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                        </svg>
+                        ${new Date(taskData.date).toLocaleDateString()}
+                    </div>
+                ` : ''}
+                ${taskData.completed ? `
+                    <div class="shared-task-meta-item" style="color: #10b981;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                        Completed
+                    </div>
+                ` : ''}
+            </div>
+            ${taskData.notes ? `
+                <div class="shared-task-notes">
+                    <div class="shared-task-notes-title">Notes</div>
+                    ${taskData.notes}
+                </div>
+            ` : ''}
+            ${taskData.subtasks && taskData.subtasks.length > 0 ? `
+                <div class="shared-task-subtasks">
+                    <div class="shared-task-subtasks-title">Subtasks (${taskData.subtasks.filter(st => st.completed).length}/${taskData.subtasks.length})</div>
+                    ${taskData.subtasks.map(subtask => `
+                        <div class="shared-subtask-item ${subtask.completed ? 'completed' : ''}">
+                            <div class="shared-subtask-checkbox ${subtask.completed ? 'checked' : ''}"></div>
+                            <span>${subtask.text}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            ` : ''}
+        </div>
+        <p style="text-align: center; color: #6b7280; font-size: 14px; margin-top: 16px;">
+            This is a read-only view of a shared task
+        </p>
+    `;
+
+    modal.classList.add('active');
+}
+
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
     loadTasksFromStorage();
@@ -165,6 +350,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateTranslations();
     setupEventListeners();
     switchView(currentView); // Start with saved view
+    loadSharedTaskFromURL(); // Check if there's a shared task in URL
 });
 
 // Get date utilities
@@ -2225,6 +2411,19 @@ function setupEventListeners() {
     document.getElementById('closeTaskPopover').addEventListener('click', closeTaskPopover);
     document.getElementById('taskPopoverBackdrop').addEventListener('click', closeTaskPopover);
 
+    // Share button
+    document.getElementById('taskShareBtn').addEventListener('click', () => {
+        shareTask();
+    });
+
+    // Shared task modal
+    document.getElementById('closeSharedTaskBtn').addEventListener('click', closeSharedTaskModal);
+    document.getElementById('sharedTaskModal').addEventListener('click', (e) => {
+        if (e.target.id === 'sharedTaskModal') {
+            closeSharedTaskModal();
+        }
+    });
+
     // Three-dots menu in popover
     document.getElementById('taskPopoverMenuBtn').addEventListener('click', (e) => {
         e.stopPropagation();
@@ -2347,6 +2546,7 @@ function setupEventListeners() {
             closeMenu();
             closeTaskPopover();
             closeSearch();
+            closeSharedTaskModal();
         }
     });
 }

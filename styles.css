@@ -1274,6 +1274,31 @@ body {
     background-color: #f3f4f6;
 }
 
+/* Share button */
+.task-share-btn {
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+    color: #6b7280;
+}
+
+.task-share-btn:hover {
+    background-color: #f3f4f6;
+    color: #1f2937;
+}
+
+.task-share-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
 /* Task move dropdown */
 .task-move-dropdown {
     display: none;
@@ -1859,6 +1884,200 @@ body {
         max-width: 90vw;
         min-width: 300px;
     }
+}
+
+/* Shared Task Modal */
+.shared-task-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 10000;
+    justify-content: center;
+    align-items: center;
+    animation: fadeIn 0.2s ease-out;
+}
+
+.shared-task-modal.active {
+    display: flex;
+}
+
+.shared-task-content {
+    background-color: white;
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    width: 90%;
+    max-width: 500px;
+    max-height: 80vh;
+    overflow-y: auto;
+    animation: slideUp 0.3s ease-out;
+}
+
+.shared-task-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.shared-task-header h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.shared-task-body {
+    padding: 24px;
+}
+
+.shared-task-item {
+    background-color: #f9fafb;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.shared-task-title {
+    font-size: 16px;
+    font-weight: 500;
+    color: #1f2937;
+    margin-bottom: 12px;
+    word-wrap: break-word;
+}
+
+.shared-task-meta {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+
+.shared-task-meta-item {
+    font-size: 12px;
+    color: #6b7280;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.shared-task-meta-item svg {
+    width: 14px;
+    height: 14px;
+}
+
+.shared-task-notes {
+    margin-top: 12px;
+    padding: 12px;
+    background-color: white;
+    border-radius: 6px;
+    font-size: 14px;
+    color: #4b5563;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.shared-task-notes-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+.shared-task-subtasks {
+    margin-top: 12px;
+}
+
+.shared-task-subtasks-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+}
+
+.shared-subtask-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 0;
+    font-size: 14px;
+    color: #4b5563;
+}
+
+.shared-subtask-checkbox {
+    width: 16px;
+    height: 16px;
+    border: 2px solid #d1d5db;
+    border-radius: 4px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.shared-subtask-checkbox.checked {
+    background-color: #818cf8;
+    border-color: #818cf8;
+}
+
+.shared-subtask-checkbox.checked::after {
+    content: '✓';
+    color: white;
+    font-size: 11px;
+}
+
+.shared-subtask-item.completed {
+    text-decoration: line-through;
+    color: #9ca3af;
+}
+
+.share-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.share-link-input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: monospace;
+    background-color: #f9fafb;
+    color: #4b5563;
+}
+
+.copy-link-btn {
+    padding: 8px 16px;
+    background-color: #818cf8;
+    border: none;
+    border-radius: 6px;
+    color: white;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.copy-link-btn:hover {
+    background-color: #6366f1;
+}
+
+.copy-link-btn:active {
+    transform: scale(0.95);
+}
+
+.copy-link-btn.copied {
+    background-color: #10b981;
 }
 
 /* Print styles */

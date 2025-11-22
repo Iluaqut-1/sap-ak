@@ -1,5 +1,8 @@
 // State management
+let currentView = 'week'; // 'month', 'week', 'day'
 let currentWeekOffset = 0;
+let currentMonthOffset = 0;
+let currentDayDate = null;
 let tasks = {};
 let currentEditingTask = null;
 let draggedTask = null;
@@ -144,13 +147,22 @@ function loadLanguageFromStorage() {
     }
 }
 
+// Load view preference
+function loadViewFromStorage() {
+    const stored = localStorage.getItem('weeklyPlannerView');
+    if (stored && ['month', 'week', 'day'].includes(stored)) {
+        currentView = stored;
+    }
+}
+
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
     loadTasksFromStorage();
     loadLanguageFromStorage();
+    loadViewFromStorage();
     updateTranslations();
-    renderWeek();
     setupEventListeners();
+    switchView(currentView); // Start with saved view
 });
 
 // Get date utilities
@@ -194,6 +206,42 @@ function formatMonthYear(date) {
 function isToday(date) {
     const today = new Date();
     return formatDate(date) === formatDate(today);
+}
+
+// Get month dates
+function getMonthDates(offset = 0) {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth() + offset;
+
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+
+    // Start from the Monday of the week containing the first day
+    const startDay = new Date(firstDay);
+    const firstDayOfWeek = firstDay.getDay();
+    const diff = firstDayOfWeek === 0 ? -6 : 1 - firstDayOfWeek;
+    startDay.setDate(firstDay.getDate() + diff);
+
+    // End on the Sunday of the week containing the last day
+    const endDay = new Date(lastDay);
+    const lastDayOfWeek = lastDay.getDay();
+    const endDiff = lastDayOfWeek === 0 ? 0 : 7 - lastDayOfWeek;
+    endDay.setDate(lastDay.getDate() + endDiff);
+
+    const dates = [];
+    const current = new Date(startDay);
+
+    while (current <= endDay) {
+        dates.push(new Date(current));
+        current.setDate(current.getDate() + 1);
+    }
+
+    return { dates, year, month: firstDay.getMonth() };
+}
+
+function isSameMonth(date, month, year) {
+    return date.getMonth() === month && date.getFullYear() === year;
 }
 
 // Render week
@@ -1336,7 +1384,212 @@ function renderSomedayTasks() {
     }
 }
 
-// Week navigation
+// Render month view
+function renderMonth() {
+    const { dates, year, month } = getMonthDates(currentMonthOffset);
+    const monthContainer = document.getElementById('monthContainer');
+    const monthYearEl = document.getElementById('currentMonthYear');
+
+    // Update header
+    const monthDate = new Date(year, month, 1);
+    monthYearEl.textContent = formatMonthYear(monthDate);
+
+    // Clear container
+    monthContainer.innerHTML = '';
+
+    // Create day names header
+    const dayNames = document.createElement('div');
+    dayNames.className = 'month-day-names';
+    const dayKeys = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    dayKeys.forEach(key => {
+        const dayName = document.createElement('div');
+        dayName.className = 'month-day-name';
+        dayName.textContent = t(`days.${key}`);
+        dayNames.appendChild(dayName);
+    });
+    monthContainer.appendChild(dayNames);
+
+    // Create month grid
+    const monthGrid = document.createElement('div');
+    monthGrid.className = 'month-grid';
+
+    dates.forEach(date => {
+        const dateKey = formatDate(date);
+        const cell = document.createElement('div');
+        cell.className = 'month-day-cell';
+        cell.dataset.date = dateKey;
+
+        if (!isSameMonth(date, month, year)) {
+            cell.classList.add('other-month');
+        }
+        if (isToday(date)) {
+            cell.classList.add('today');
+        }
+
+        // Day number
+        const dayNumber = document.createElement('div');
+        dayNumber.className = 'month-day-number';
+        dayNumber.textContent = date.getDate();
+        cell.appendChild(dayNumber);
+
+        // Tasks preview
+        const tasksPreview = document.createElement('div');
+        tasksPreview.className = 'month-tasks-preview';
+
+        if (tasks[dateKey]) {
+            const maxDots = 3;
+            tasks[dateKey].slice(0, maxDots).forEach(task => {
+                const dot = document.createElement('div');
+                dot.className = `month-task-dot ${task.color || 'default'}`;
+                tasksPreview.appendChild(dot);
+            });
+
+            if (tasks[dateKey].length > maxDots) {
+                const more = document.createElement('div');
+                more.className = 'month-more-tasks';
+                more.textContent = `+${tasks[dateKey].length - maxDots} more`;
+                tasksPreview.appendChild(more);
+            }
+        }
+
+        cell.appendChild(tasksPreview);
+
+        // Click to switch to day view
+        cell.addEventListener('click', () => {
+            currentDayDate = dateKey;
+            switchView('day');
+        });
+
+        monthGrid.appendChild(cell);
+    });
+
+    monthContainer.appendChild(monthGrid);
+}
+
+// Render day view
+function renderDay() {
+    const dayContainer = document.getElementById('dayContainer');
+    dayContainer.innerHTML = '';
+
+    const date = currentDayDate ? new Date(currentDayDate + 'T00:00:00') : new Date();
+    const dateKey = formatDate(date);
+    currentDayDate = dateKey;
+
+    // Create header
+    const header = document.createElement('div');
+    header.className = 'day-view-header';
+
+    const titleDiv = document.createElement('div');
+    const title = document.createElement('div');
+    title.className = 'day-view-title';
+    title.textContent = formatDayName(date);
+    titleDiv.appendChild(title);
+
+    const dateText = document.createElement('div');
+    dateText.className = 'day-view-date';
+    dateText.textContent = formatMonthYear(date) + ' ' + date.getDate();
+    titleDiv.appendChild(dateText);
+
+    header.appendChild(titleDiv);
+    dayContainer.appendChild(header);
+
+    // Update month/year display
+    document.getElementById('currentMonthYear').textContent = formatMonthYear(date);
+
+    // Create content
+    const content = document.createElement('div');
+    content.className = 'day-view-content';
+
+    const tasksDiv = document.createElement('div');
+    tasksDiv.className = 'day-view-tasks';
+    tasksDiv.dataset.date = dateKey;
+
+    // Make droppable
+    tasksDiv.addEventListener('dragover', handleDragOver);
+    tasksDiv.addEventListener('drop', (e) => handleDrop(e, dateKey));
+    tasksDiv.addEventListener('dragleave', handleDragLeave);
+
+    // Add touch events
+    tasksDiv.addEventListener('touchmove', handleTouchMove);
+    tasksDiv.addEventListener('touchend', (e) => handleTouchEnd(e, dateKey));
+
+    // Click to add task
+    tasksDiv.addEventListener('click', (e) => {
+        if (e.target === tasksDiv || e.target.classList.contains('day-view-empty')) {
+            createNewTask(dateKey, tasksDiv);
+        }
+    });
+
+    // Render tasks
+    if (tasks[dateKey] && tasks[dateKey].length > 0) {
+        tasks[dateKey].forEach(task => {
+            const taskEl = createTaskElement(task, dateKey);
+            tasksDiv.appendChild(taskEl);
+        });
+    } else {
+        const empty = document.createElement('div');
+        empty.className = 'day-view-empty';
+        empty.textContent = 'No tasks for this day. Click to add one.';
+        tasksDiv.appendChild(empty);
+    }
+
+    content.appendChild(tasksDiv);
+    dayContainer.appendChild(content);
+}
+
+// View switching
+function switchView(view) {
+    currentView = view;
+    localStorage.setItem('weeklyPlannerView', view);
+
+    // Hide all views
+    document.getElementById('monthContainer').style.display = 'none';
+    document.getElementById('weekContainer').style.display = 'none';
+    document.getElementById('dayContainer').style.display = 'none';
+
+    // Show/hide someday based on view
+    const somedaySection = document.getElementById('somedaySection');
+    somedaySection.style.display = view === 'day' ? 'none' : 'block';
+
+    // Update view buttons
+    document.querySelectorAll('.view-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.view === view) {
+            btn.classList.add('active');
+        }
+    });
+
+    // Show current view and render
+    if (view === 'month') {
+        document.getElementById('monthContainer').style.display = 'block';
+        renderMonth();
+    } else if (view === 'week') {
+        document.getElementById('weekContainer').style.display = 'block';
+        renderWeek();
+        renderSomedayTasks();
+    } else if (view === 'day') {
+        document.getElementById('dayContainer').style.display = 'block';
+        renderDay();
+    }
+}
+
+// Navigation (works for all views)
+function navigate(direction) {
+    if (currentView === 'month') {
+        currentMonthOffset += direction;
+        renderMonth();
+    } else if (currentView === 'week') {
+        currentWeekOffset += direction;
+        renderWeek();
+    } else if (currentView === 'day') {
+        const currentDate = new Date(currentDayDate + 'T00:00:00');
+        currentDate.setDate(currentDate.getDate() + direction);
+        currentDayDate = formatDate(currentDate);
+        renderDay();
+    }
+}
+
+// Week navigation (deprecated - use navigate instead)
 function navigateWeek(direction) {
     currentWeekOffset += direction;
     renderWeek();
@@ -1500,9 +1753,17 @@ function setTaskColorFromPopover(color) {
 
 // Event listeners
 function setupEventListeners() {
-    // Week navigation
-    document.getElementById('prevWeekBtn').addEventListener('click', () => navigateWeek(-1));
-    document.getElementById('nextWeekBtn').addEventListener('click', () => navigateWeek(1));
+    // View switcher
+    document.querySelectorAll('.view-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const view = btn.dataset.view;
+            switchView(view);
+        });
+    });
+
+    // Navigation (works for all views)
+    document.getElementById('prevBtn').addEventListener('click', () => navigate(-1));
+    document.getElementById('nextBtn').addEventListener('click', () => navigate(1));
 
     // Color picker
     document.getElementById('colorPickerModal').addEventListener('click', (e) => {

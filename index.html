@@ -359,15 +359,38 @@
             <!-- Color picker in popover -->
             <div class="task-color-picker">
                 <div class="color-picker-label">Task Color:</div>
-                <div class="color-options-inline">
-                    <button class="color-option-small" data-color="default" style="background-color: #fef3c7" title="Default"></button>
-                    <button class="color-option-small" data-color="green" style="background-color: #6ee7b7" title="Green"></button>
-                    <button class="color-option-small" data-color="blue" style="background-color: #93c5fd" title="Blue"></button>
-                    <button class="color-option-small" data-color="purple" style="background-color: #c4b5fd" title="Purple"></button>
-                    <button class="color-option-small" data-color="pink" style="background-color: #f9a8d4" title="Pink"></button>
-                    <button class="color-option-small" data-color="red" style="background-color: #fca5a5" title="Red"></button>
-                    <button class="color-option-small" data-color="orange" style="background-color: #fdba74" title="Orange"></button>
-                    <button class="color-option-small" data-color="gray" style="background-color: #d1d5db" title="Gray"></button>
+
+                <!-- Default colors -->
+                <div class="color-section">
+                    <div class="color-section-title">Default</div>
+                    <div class="color-options-inline">
+                        <button class="color-option-small" data-color="default" style="background-color: #fef3c7" title="Default"></button>
+                        <button class="color-option-small" data-color="green" style="background-color: #6ee7b7" title="Green"></button>
+                        <button class="color-option-small" data-color="blue" style="background-color: #93c5fd" title="Blue"></button>
+                        <button class="color-option-small" data-color="purple" style="background-color: #c4b5fd" title="Purple"></button>
+                        <button class="color-option-small" data-color="pink" style="background-color: #f9a8d4" title="Pink"></button>
+                        <button class="color-option-small" data-color="red" style="background-color: #fca5a5" title="Red"></button>
+                        <button class="color-option-small" data-color="orange" style="background-color: #fdba74" title="Orange"></button>
+                        <button class="color-option-small" data-color="gray" style="background-color: #d1d5db" title="Gray"></button>
+                    </div>
+                </div>
+
+                <!-- Custom colors -->
+                <div class="color-section" id="customColorsSection" style="display: none;">
+                    <div class="color-section-title">Custom</div>
+                    <div class="color-options-inline" id="customColorsList"></div>
+                </div>
+
+                <!-- Add custom color -->
+                <div class="custom-color-input">
+                    <input type="color" id="customColorPicker" class="color-input" title="Pick a color">
+                    <input type="text" id="customColorHex" class="hex-input" placeholder="#000000" maxlength="7">
+                    <button class="add-color-btn" id="addCustomColorBtn" title="Add custom color">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                    </button>
                 </div>
             </div>
         </div>

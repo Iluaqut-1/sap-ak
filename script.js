@@ -10,6 +10,7 @@ let currentLanguage = 'en';
 let taskPopoverState = { taskId: null, dateKey: null, position: null };
 let isCloning = false;
 let draggedOverTask = null;
+let customColors = [];
 
 // Internationalization
 const translations = {
@@ -160,6 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadTasksFromStorage();
     loadLanguageFromStorage();
     loadViewFromStorage();
+    loadCustomColors();
     updateTranslations();
     setupEventListeners();
     switchView(currentView); // Start with saved view
@@ -593,6 +595,9 @@ function openTaskPopover(taskId, dateKey, taskElement) {
     // Load subtasks
     renderSubtasks(task);
 
+    // Render custom colors
+    renderCustomColors();
+
     // Set current color selection
     document.querySelectorAll('.color-option-small').forEach(btn => {
         btn.classList.remove('selected');
@@ -780,6 +785,137 @@ function deleteSubtask(index) {
     task.subtasks.splice(index, 1);
     renderSubtasks(task);
     saveTasksToStorage();
+}
+
+// Custom Colors management
+function loadCustomColors() {
+    const stored = localStorage.getItem('weeklyPlannerCustomColors');
+    if (stored) {
+        try {
+            customColors = JSON.parse(stored);
+        } catch (e) {
+            customColors = [];
+        }
+    }
+}
+
+function saveCustomColors() {
+    localStorage.setItem('weeklyPlannerCustomColors', JSON.stringify(customColors));
+}
+
+function renderCustomColors() {
+    const customColorsList = document.getElementById('customColorsList');
+    const customColorsSection = document.getElementById('customColorsSection');
+
+    if (!customColorsList) return;
+
+    customColorsList.innerHTML = '';
+
+    if (customColors.length > 0) {
+        customColorsSection.style.display = 'block';
+
+        customColors.forEach((color, index) => {
+            const colorBtn = document.createElement('button');
+            colorBtn.className = 'color-option-small custom-color';
+            colorBtn.dataset.color = color;
+            colorBtn.style.backgroundColor = color;
+            colorBtn.title = color;
+
+            // Click to select color
+            colorBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                // Check if clicking the X button
+                if (e.target === colorBtn) {
+                    setTaskColorFromPopover(color);
+                }
+            });
+
+            // Click X to delete
+            colorBtn.addEventListener('click', (e) => {
+                const rect = colorBtn.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                // Check if click is on the X button area (top-right corner)
+                if (x > 20 && y < 12) {
+                    e.stopPropagation();
+                    deleteCustomColor(index);
+                }
+            });
+
+            customColorsList.appendChild(colorBtn);
+        });
+    } else {
+        customColorsSection.style.display = 'none';
+    }
+}
+
+function addCustomColor() {
+    const hexInput = document.getElementById('customColorHex');
+    let color = hexInput.value.trim();
+
+    // Validate and format hex color
+    if (!color.startsWith('#')) {
+        color = '#' + color;
+    }
+
+    // Validate hex format
+    const hexRegex = /^#([0-9A-F]{3}){1,2}$/i;
+    if (!hexRegex.test(color)) {
+        alert('Please enter a valid hex color (e.g., #FF5733)');
+        return;
+    }
+
+    // Normalize to 6-digit hex
+    if (color.length === 4) {
+        color = '#' + color[1] + color[1] + color[2] + color[2] + color[3] + color[3];
+    }
+
+    // Check if color already exists
+    if (customColors.includes(color.toUpperCase())) {
+        alert('This color is already in your palette');
+        return;
+    }
+
+    // Add color
+    customColors.push(color.toUpperCase());
+    saveCustomColors();
+    renderCustomColors();
+
+    // Clear input
+    hexInput.value = '';
+    document.getElementById('customColorPicker').value = '#000000';
+}
+
+function deleteCustomColor(index) {
+    if (confirm('Remove this custom color?')) {
+        customColors.splice(index, 1);
+        saveCustomColors();
+        renderCustomColors();
+    }
+}
+
+function syncColorInputs() {
+    const colorPicker = document.getElementById('customColorPicker');
+    const hexInput = document.getElementById('customColorHex');
+
+    if (!colorPicker || !hexInput) return;
+
+    // Sync color picker to hex input
+    colorPicker.addEventListener('input', (e) => {
+        hexInput.value = e.target.value.toUpperCase();
+    });
+
+    // Sync hex input to color picker
+    hexInput.addEventListener('input', (e) => {
+        let value = e.target.value.trim();
+        if (!value.startsWith('#')) {
+            value = '#' + value;
+        }
+        if (/^#[0-9A-F]{6}$/i.test(value)) {
+            colorPicker.value = value;
+        }
+    });
 }
 
 // Apply text formatting in popover
@@ -2124,6 +2260,16 @@ function setupEventListeners() {
 
     // Add subtask button
     document.getElementById('addSubtaskBtn').addEventListener('click', addSubtask);
+
+    // Custom colors
+    document.getElementById('addCustomColorBtn').addEventListener('click', addCustomColor);
+    document.getElementById('customColorHex').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            addCustomColor();
+        }
+    });
+    syncColorInputs();
 
     // Menu
     document.getElementById('menuBtn').addEventListener('click', (e) => {

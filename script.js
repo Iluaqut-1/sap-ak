@@ -1,5 +1,8 @@
 // State management
+let currentView = 'week'; // 'month', 'week', 'day'
 let currentWeekOffset = 0;
+let currentMonthOffset = 0;
+let currentDayDate = null;
 let tasks = {};
 let currentEditingTask = null;
 let draggedTask = null;
@@ -7,6 +10,11 @@ let currentLanguage = 'en';
 let taskPopoverState = { taskId: null, dateKey: null, position: null };
 let isCloning = false;
 let draggedOverTask = null;
+let customColors = [];
+
+// Calendar management
+let calendars = [];
+let currentCalendarId = null;
 
 // Internationalization
 const translations = {
@@ -144,13 +152,219 @@ function loadLanguageFromStorage() {
     }
 }
 
+// Load view preference
+function loadViewFromStorage() {
+    const stored = localStorage.getItem('weeklyPlannerView');
+    if (stored && ['month', 'week', 'day'].includes(stored)) {
+        currentView = stored;
+    }
+}
+
+// Share Task Functions
+function shareTask() {
+    const { taskId, dateKey } = taskPopoverState;
+    if (!taskId || !dateKey) return;
+
+    const task = tasks[dateKey]?.find(t => t.id === taskId);
+    if (!task) return;
+
+    // Create task data object
+    const taskData = {
+        text: task.text,
+        color: task.color || 'default',
+        notes: task.notes || '',
+        subtasks: task.subtasks || [],
+        date: dateKey,
+        completed: task.completed || false
+    };
+
+    // Encode task data to base64
+    const jsonString = JSON.stringify(taskData);
+    const base64Data = btoa(encodeURIComponent(jsonString));
+
+    // Create shareable URL
+    const shareUrl = `${window.location.origin}${window.location.pathname}?task=${base64Data}`;
+
+    // Open share modal
+    openSharedTaskModal(task, shareUrl);
+}
+
+function openSharedTaskModal(task, shareUrl) {
+    const modal = document.getElementById('sharedTaskModal');
+    const body = document.getElementById('sharedTaskBody');
+
+    // Render share UI with link
+    body.innerHTML = `
+        <div class="shared-task-item">
+            <div class="shared-task-title">${task.text}</div>
+            ${task.notes ? `
+                <div class="shared-task-notes">
+                    <div class="shared-task-notes-title">Notes</div>
+                    ${task.notes}
+                </div>
+            ` : ''}
+            ${task.subtasks && task.subtasks.length > 0 ? `
+                <div class="shared-task-subtasks">
+                    <div class="shared-task-subtasks-title">Subtasks (${task.subtasks.filter(st => st.completed).length}/${task.subtasks.length})</div>
+                    ${task.subtasks.map(subtask => `
+                        <div class="shared-subtask-item ${subtask.completed ? 'completed' : ''}">
+                            <div class="shared-subtask-checkbox ${subtask.completed ? 'checked' : ''}"></div>
+                            <span>${subtask.text}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            ` : ''}
+        </div>
+        <div class="share-actions">
+            <input type="text" class="share-link-input" value="${shareUrl}" readonly id="shareLinkInput">
+            <button class="copy-link-btn" id="copyLinkBtn">Copy Link</button>
+        </div>
+    `;
+
+    modal.classList.add('active');
+
+    // Add event listener for copy button
+    document.getElementById('copyLinkBtn').addEventListener('click', () => copyShareLink(shareUrl));
+
+    // Select the link input for easy copying
+    document.getElementById('shareLinkInput').select();
+}
+
+function closeSharedTaskModal() {
+    const modal = document.getElementById('sharedTaskModal');
+    modal.classList.remove('active');
+}
+
+function copyShareLink(url) {
+    const input = document.getElementById('shareLinkInput');
+    input.select();
+    input.setSelectionRange(0, 99999); // For mobile devices
+
+    try {
+        navigator.clipboard.writeText(url).then(() => {
+            const btn = document.getElementById('copyLinkBtn');
+            btn.textContent = 'Copied!';
+            btn.classList.add('copied');
+
+            setTimeout(() => {
+                btn.textContent = 'Copy Link';
+                btn.classList.remove('copied');
+            }, 2000);
+        }).catch(() => {
+            // Fallback for older browsers
+            document.execCommand('copy');
+            const btn = document.getElementById('copyLinkBtn');
+            btn.textContent = 'Copied!';
+            btn.classList.add('copied');
+
+            setTimeout(() => {
+                btn.textContent = 'Copy Link';
+                btn.classList.remove('copied');
+            }, 2000);
+        });
+    } catch (err) {
+        console.error('Failed to copy link:', err);
+    }
+}
+
+function loadSharedTaskFromURL() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const taskParam = urlParams.get('task');
+
+    if (!taskParam) return;
+
+    try {
+        // Decode base64 to JSON
+        const jsonString = decodeURIComponent(atob(taskParam));
+        const taskData = JSON.parse(jsonString);
+
+        // Render shared task in modal
+        renderSharedTask(taskData);
+    } catch (err) {
+        console.error('Failed to load shared task:', err);
+    }
+}
+
+function renderSharedTask(taskData) {
+    const modal = document.getElementById('sharedTaskModal');
+    const body = document.getElementById('sharedTaskBody');
+
+    // Get color for display
+    const colorStyle = taskData.color && taskData.color !== 'default'
+        ? `background-color: ${taskData.color}; width: 100%; height: 4px; border-radius: 2px; margin-bottom: 12px;`
+        : '';
+
+    body.innerHTML = `
+        <div class="shared-task-item">
+            ${colorStyle ? `<div style="${colorStyle}"></div>` : ''}
+            <div class="shared-task-title">${taskData.text}</div>
+            <div class="shared-task-meta">
+                ${taskData.date ? `
+                    <div class="shared-task-meta-item">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="16" y1="2" x2="16" y2="6"></line>
+                            <line x1="8" y1="2" x2="8" y2="6"></line>
+                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                        </svg>
+                        ${new Date(taskData.date).toLocaleDateString()}
+                    </div>
+                ` : ''}
+                ${taskData.completed ? `
+                    <div class="shared-task-meta-item" style="color: #10b981;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                        Completed
+                    </div>
+                ` : ''}
+            </div>
+            ${taskData.notes ? `
+                <div class="shared-task-notes">
+                    <div class="shared-task-notes-title">Notes</div>
+                    ${taskData.notes}
+                </div>
+            ` : ''}
+            ${taskData.subtasks && taskData.subtasks.length > 0 ? `
+                <div class="shared-task-subtasks">
+                    <div class="shared-task-subtasks-title">Subtasks (${taskData.subtasks.filter(st => st.completed).length}/${taskData.subtasks.length})</div>
+                    ${taskData.subtasks.map(subtask => `
+                        <div class="shared-subtask-item ${subtask.completed ? 'completed' : ''}">
+                            <div class="shared-subtask-checkbox ${subtask.completed ? 'checked' : ''}"></div>
+                            <span>${subtask.text}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            ` : ''}
+        </div>
+        <p style="text-align: center; color: #6b7280; font-size: 14px; margin-top: 16px;">
+            This is a read-only view of a shared task
+        </p>
+    `;
+
+    modal.classList.add('active');
+}
+
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
-    loadTasksFromStorage();
+    loadCalendarsFromStorage(); // Load calendars (which loads tasks internally)
     loadLanguageFromStorage();
+    loadViewFromStorage();
+    loadCustomColors();
+    loadThemeFromStorage(); // Load saved theme
     updateTranslations();
-    renderWeek();
     setupEventListeners();
+    renderCalendarList(); // Render calendar selector
+    switchView(currentView); // Start with saved view
+    loadSharedTaskFromURL(); // Check if there's a shared task in URL
+
+    // Check reminders every minute
+    checkReminders();
+    setInterval(checkReminders, 60000); // Check every minute
+
+    // Request notification permission (only if user hasn't decided yet)
+    // This is non-intrusive - won't show popup unless user interacts
+    setTimeout(requestNotificationPermission, 3000); // Wait 3s before asking
 });
 
 // Get date utilities
@@ -196,6 +410,42 @@ function isToday(date) {
     return formatDate(date) === formatDate(today);
 }
 
+// Get month dates
+function getMonthDates(offset = 0) {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth() + offset;
+
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+
+    // Start from the Monday of the week containing the first day
+    const startDay = new Date(firstDay);
+    const firstDayOfWeek = firstDay.getDay();
+    const diff = firstDayOfWeek === 0 ? -6 : 1 - firstDayOfWeek;
+    startDay.setDate(firstDay.getDate() + diff);
+
+    // End on the Sunday of the week containing the last day
+    const endDay = new Date(lastDay);
+    const lastDayOfWeek = lastDay.getDay();
+    const endDiff = lastDayOfWeek === 0 ? 0 : 7 - lastDayOfWeek;
+    endDay.setDate(lastDay.getDate() + endDiff);
+
+    const dates = [];
+    const current = new Date(startDay);
+
+    while (current <= endDay) {
+        dates.push(new Date(current));
+        current.setDate(current.getDate() + 1);
+    }
+
+    return { dates, year, month: firstDay.getMonth() };
+}
+
+function isSameMonth(date, month, year) {
+    return date.getMonth() === month && date.getFullYear() === year;
+}
+
 // Render week
 function renderWeek() {
     const weekDates = getWeekDates(currentWeekOffset);
@@ -238,11 +488,21 @@ function renderWeek() {
     renderSomedayTasks();
 }
 
+// Check if date is in the past (before today)
+function isPastDate(date) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const checkDate = new Date(date);
+    checkDate.setHours(0, 0, 0, 0);
+    return checkDate < today;
+}
+
 // Create day column
 function createDayColumn(date, dateKey) {
     const dayColumn = document.createElement('div');
     const isWeekend = date.getDay() === 0 || date.getDay() === 6; // Sunday or Saturday
-    dayColumn.className = `day-column${isToday(date) ? ' today' : ''}${isWeekend ? ' weekend' : ''}`;
+    const past = isPastDate(date);
+    dayColumn.className = `day-column${isToday(date) ? ' today' : ''}${isWeekend ? ' weekend' : ''}${past ? ' past' : ''}`;
 
     // Header
     const header = document.createElement('div');
@@ -280,16 +540,32 @@ function createDayColumn(date, dateKey) {
         }
     });
 
-    // Render tasks for this day
+    // Render tasks for this day (including recurring task instances)
+    const allTasksForDay = [];
+
+    // Add regular tasks
     if (tasks[dateKey]) {
-        tasks[dateKey].forEach(task => {
-            const taskEl = createTaskElement(task, dateKey);
-            tasksContainer.appendChild(taskEl);
-        });
+        allTasksForDay.push(...tasks[dateKey]);
     }
 
+    // Add recurring task instances
+    Object.keys(tasks).forEach(origDateKey => {
+        tasks[origDateKey].forEach(task => {
+            if (task.recurrence) {
+                const instances = getRecurringTaskInstances(task, origDateKey, dateKey, dateKey);
+                allTasksForDay.push(...instances);
+            }
+        });
+    });
+
+    // Render all tasks
+    allTasksForDay.forEach(task => {
+        const taskEl = createTaskElement(task, dateKey);
+        tasksContainer.appendChild(taskEl);
+    });
+
     // If no tasks, show invisible placeholder for click area
-    if (!tasks[dateKey] || tasks[dateKey].length === 0) {
+    if (allTasksForDay.length === 0) {
         const placeholder = document.createElement('div');
         placeholder.className = 'task-placeholder';
         placeholder.textContent = ''; // Empty - no text shown
@@ -316,6 +592,57 @@ function createTaskElement(task, dateKey) {
     taskText.className = 'task-text';
     taskText.innerHTML = formatTaskText(task.text);
     taskEl.appendChild(taskText);
+
+    // Task indicators (subtasks, notes)
+    const indicators = document.createElement('div');
+    indicators.className = 'task-indicators';
+
+    // Subtasks indicator
+    if (task.subtasks && task.subtasks.length > 0) {
+        const completed = task.subtasks.filter(st => st.completed).length;
+        const total = task.subtasks.length;
+        const subtaskIndicator = document.createElement('span');
+        subtaskIndicator.className = 'task-indicator subtask-indicator';
+        subtaskIndicator.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg> ${completed}/${total}`;
+        indicators.appendChild(subtaskIndicator);
+    }
+
+    // Notes indicator
+    if (task.notes && task.notes.trim()) {
+        const notesIndicator = document.createElement('span');
+        notesIndicator.className = 'task-indicator notes-indicator';
+        notesIndicator.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>';
+        notesIndicator.title = 'Has notes';
+        indicators.appendChild(notesIndicator);
+    }
+
+    // Recurrence indicator
+    if (task.recurrence) {
+        const recurrenceIndicator = document.createElement('span');
+        recurrenceIndicator.className = 'task-indicator recurrence-indicator';
+        recurrenceIndicator.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>';
+        recurrenceIndicator.title = `Repeats ${task.recurrence.type}`;
+        indicators.appendChild(recurrenceIndicator);
+    }
+
+    // Reminder indicator
+    if (task.reminder) {
+        const reminderIndicator = document.createElement('span');
+        reminderIndicator.className = 'task-indicator reminder-indicator';
+        const reminderDate = new Date(task.reminder);
+        const now = new Date();
+        const isPast = reminderDate < now;
+        reminderIndicator.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>';
+        reminderIndicator.title = `Reminder: ${reminderDate.toLocaleString()}`;
+        if (isPast) {
+            reminderIndicator.style.color = '#ef4444'; // Red if past
+        }
+        indicators.appendChild(reminderIndicator);
+    }
+
+    if (indicators.children.length > 0) {
+        taskEl.appendChild(indicators);
+    }
 
     // Clone icon
     const cloneIcon = document.createElement('span');
@@ -461,7 +788,9 @@ function createNewTask(dateKey, container) {
                 id: Date.now().toString(),
                 text: text,
                 color: '',
-                completed: false
+                completed: false,
+                notes: '',
+                subtasks: []
             };
 
             if (!tasks[dateKey]) {
@@ -509,6 +838,16 @@ function openTaskPopover(taskId, dateKey, taskElement) {
     // Set textarea value
     textarea.value = task.text;
 
+    // Load notes
+    const notesTextarea = document.getElementById('taskNotesTextarea');
+    notesTextarea.value = task.notes || '';
+
+    // Load subtasks
+    renderSubtasks(task);
+
+    // Render custom colors
+    renderCustomColors();
+
     // Set current color selection
     document.querySelectorAll('.color-option-small').forEach(btn => {
         btn.classList.remove('selected');
@@ -519,6 +858,12 @@ function openTaskPopover(taskId, dateKey, taskElement) {
 
     // Display attached files if any
     displayAttachedFiles(task);
+
+    // Load recurrence data
+    loadRecurrenceData(task);
+
+    // Load reminder data
+    loadReminderData(task);
 
     // Position popover near the task
     const rect = taskElement.getBoundingClientRect();
@@ -569,8 +914,10 @@ function closeTaskPopover() {
         const task = tasks[taskPopoverState.dateKey]?.find(t => t.id === taskPopoverState.taskId);
         if (task) {
             const newText = textarea.value.trim();
+            const notesTextarea = document.getElementById('taskNotesTextarea');
             if (newText) {
                 task.text = newText;
+                task.notes = notesTextarea.value.trim();
                 saveTasksToStorage();
                 renderWeek();
             }
@@ -582,6 +929,554 @@ function closeTaskPopover() {
     backdrop.classList.remove('active');
     moveDropdown.classList.remove('active');
     taskPopoverState = { taskId: null, dateKey: null, taskElement: null };
+}
+
+// Subtasks management
+function renderSubtasks(task) {
+    const subtasksList = document.getElementById('subtasksList');
+    const progressEl = document.getElementById('subtasksProgress');
+
+    subtasksList.innerHTML = '';
+
+    if (!task.subtasks) {
+        task.subtasks = [];
+    }
+
+    // Update progress
+    const completed = task.subtasks.filter(st => st.completed).length;
+    const total = task.subtasks.length;
+
+    if (total > 0) {
+        progressEl.textContent = `${completed}/${total}`;
+    } else {
+        progressEl.textContent = '';
+    }
+
+    // Render each subtask
+    task.subtasks.forEach((subtask, index) => {
+        const item = document.createElement('div');
+        item.className = 'subtask-item';
+        if (subtask.completed) {
+            item.classList.add('completed');
+        }
+
+        // Checkbox
+        const checkbox = document.createElement('div');
+        checkbox.className = 'subtask-checkbox';
+        if (subtask.completed) {
+            checkbox.classList.add('checked');
+        }
+        checkbox.onclick = () => toggleSubtask(index);
+        item.appendChild(checkbox);
+
+        // Text input
+        const textInput = document.createElement('input');
+        textInput.type = 'text';
+        textInput.className = 'subtask-text';
+        textInput.value = subtask.text;
+        textInput.placeholder = 'Subtask...';
+        textInput.oninput = (e) => {
+            subtask.text = e.target.value;
+            saveTasksToStorage();
+        };
+        textInput.onkeydown = (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addSubtask();
+            }
+        };
+        item.appendChild(textInput);
+
+        // Delete button
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'subtask-delete';
+        deleteBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+        deleteBtn.onclick = () => deleteSubtask(index);
+        item.appendChild(deleteBtn);
+
+        subtasksList.appendChild(item);
+    });
+}
+
+function addSubtask() {
+    const { taskId, dateKey } = taskPopoverState;
+    const task = tasks[dateKey]?.find(t => t.id === taskId);
+    if (!task) return;
+
+    if (!task.subtasks) {
+        task.subtasks = [];
+    }
+
+    task.subtasks.push({
+        id: Date.now().toString(),
+        text: '',
+        completed: false
+    });
+
+    renderSubtasks(task);
+    saveTasksToStorage();
+
+    // Focus the new subtask input
+    const inputs = document.querySelectorAll('.subtask-text');
+    if (inputs.length > 0) {
+        inputs[inputs.length - 1].focus();
+    }
+}
+
+function toggleSubtask(index) {
+    const { taskId, dateKey } = taskPopoverState;
+    const task = tasks[dateKey]?.find(t => t.id === taskId);
+    if (!task || !task.subtasks[index]) return;
+
+    task.subtasks[index].completed = !task.subtasks[index].completed;
+    renderSubtasks(task);
+    saveTasksToStorage();
+}
+
+function deleteSubtask(index) {
+    const { taskId, dateKey } = taskPopoverState;
+    const task = tasks[dateKey]?.find(t => t.id === taskId);
+    if (!task) return;
+
+    task.subtasks.splice(index, 1);
+    renderSubtasks(task);
+    saveTasksToStorage();
+}
+
+// Custom Colors management
+function loadCustomColors() {
+    const stored = localStorage.getItem('weeklyPlannerCustomColors');
+    if (stored) {
+        try {
+            customColors = JSON.parse(stored);
+        } catch (e) {
+            customColors = [];
+        }
+    }
+}
+
+function saveCustomColors() {
+    localStorage.setItem('weeklyPlannerCustomColors', JSON.stringify(customColors));
+}
+
+function renderCustomColors() {
+    const customColorsList = document.getElementById('customColorsList');
+    const customColorsSection = document.getElementById('customColorsSection');
+
+    if (!customColorsList) return;
+
+    customColorsList.innerHTML = '';
+
+    if (customColors.length > 0) {
+        customColorsSection.style.display = 'block';
+
+        customColors.forEach((color, index) => {
+            const colorBtn = document.createElement('button');
+            colorBtn.className = 'color-option-small custom-color';
+            colorBtn.dataset.color = color;
+            colorBtn.style.backgroundColor = color;
+            colorBtn.title = color;
+
+            // Click to select color
+            colorBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                // Check if clicking the X button
+                if (e.target === colorBtn) {
+                    setTaskColorFromPopover(color);
+                }
+            });
+
+            // Click X to delete
+            colorBtn.addEventListener('click', (e) => {
+                const rect = colorBtn.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                // Check if click is on the X button area (top-right corner)
+                if (x > 20 && y < 12) {
+                    e.stopPropagation();
+                    deleteCustomColor(index);
+                }
+            });
+
+            customColorsList.appendChild(colorBtn);
+        });
+    } else {
+        customColorsSection.style.display = 'none';
+    }
+}
+
+function addCustomColor() {
+    const hexInput = document.getElementById('customColorHex');
+    let color = hexInput.value.trim();
+
+    // Validate and format hex color
+    if (!color.startsWith('#')) {
+        color = '#' + color;
+    }
+
+    // Validate hex format
+    const hexRegex = /^#([0-9A-F]{3}){1,2}$/i;
+    if (!hexRegex.test(color)) {
+        alert('Please enter a valid hex color (e.g., #FF5733)');
+        return;
+    }
+
+    // Normalize to 6-digit hex
+    if (color.length === 4) {
+        color = '#' + color[1] + color[1] + color[2] + color[2] + color[3] + color[3];
+    }
+
+    // Check if color already exists
+    if (customColors.includes(color.toUpperCase())) {
+        alert('This color is already in your palette');
+        return;
+    }
+
+    // Add color
+    customColors.push(color.toUpperCase());
+    saveCustomColors();
+    renderCustomColors();
+
+    // Clear input
+    hexInput.value = '';
+    document.getElementById('customColorPicker').value = '#000000';
+}
+
+function deleteCustomColor(index) {
+    if (confirm('Remove this custom color?')) {
+        customColors.splice(index, 1);
+        saveCustomColors();
+        renderCustomColors();
+    }
+}
+
+function syncColorInputs() {
+    const colorPicker = document.getElementById('customColorPicker');
+    const hexInput = document.getElementById('customColorHex');
+
+    if (!colorPicker || !hexInput) return;
+
+    // Sync color picker to hex input
+    colorPicker.addEventListener('input', (e) => {
+        hexInput.value = e.target.value.toUpperCase();
+    });
+
+    // Sync hex input to color picker
+    hexInput.addEventListener('input', (e) => {
+        let value = e.target.value.trim();
+        if (!value.startsWith('#')) {
+            value = '#' + value;
+        }
+        if (/^#[0-9A-F]{6}$/i.test(value)) {
+            colorPicker.value = value;
+        }
+    });
+}
+
+// Recurrence Functions
+function handleRecurrenceTypeChange() {
+    const recurrenceType = document.getElementById('recurrenceType').value;
+    const weeklyOptions = document.getElementById('weeklyOptions');
+    const monthlyOptions = document.getElementById('monthlyOptions');
+    const customOptions = document.getElementById('customOptions');
+    const commonOptions = document.getElementById('recurrenceCommonOptions');
+
+    // Hide all options first
+    weeklyOptions.style.display = 'none';
+    monthlyOptions.style.display = 'none';
+    customOptions.style.display = 'none';
+    commonOptions.style.display = 'none';
+
+    // Show relevant options based on type
+    if (recurrenceType !== 'none') {
+        commonOptions.style.display = 'block';
+
+        if (recurrenceType === 'weekly') {
+            weeklyOptions.style.display = 'block';
+        } else if (recurrenceType === 'monthly') {
+            monthlyOptions.style.display = 'block';
+        } else if (recurrenceType === 'custom') {
+            customOptions.style.display = 'block';
+        }
+    }
+
+    // Save recurrence to task
+    saveRecurrenceToTask();
+}
+
+function toggleWeekday(dayIndex) {
+    const btn = document.querySelector(`.weekday-btn[data-day="${dayIndex}"]`);
+    btn.classList.toggle('active');
+    saveRecurrenceToTask();
+}
+
+function saveRecurrenceToTask() {
+    const { taskId, dateKey } = taskPopoverState;
+    if (!taskId || !dateKey) return;
+
+    const task = tasks[dateKey]?.find(t => t.id === taskId);
+    if (!task) return;
+
+    const recurrenceType = document.getElementById('recurrenceType').value;
+
+    if (recurrenceType === 'none') {
+        delete task.recurrence;
+    } else {
+        const recurrence = {
+            type: recurrenceType,
+            skipWeekends: document.getElementById('skipWeekends').checked,
+            endDate: document.getElementById('recurrenceEndDate').value || null
+        };
+
+        if (recurrenceType === 'weekly') {
+            const selectedDays = [];
+            document.querySelectorAll('.weekday-btn.active').forEach(btn => {
+                selectedDays.push(parseInt(btn.dataset.day));
+            });
+            recurrence.weekdays = selectedDays;
+        } else if (recurrenceType === 'monthly') {
+            recurrence.dayOfMonth = parseInt(document.getElementById('monthlyDay').value) || 1;
+        } else if (recurrenceType === 'custom') {
+            recurrence.interval = parseInt(document.getElementById('customInterval').value) || 1;
+            recurrence.unit = document.getElementById('customUnit').value;
+        }
+
+        task.recurrence = recurrence;
+    }
+
+    saveTasksToStorage();
+    renderWeek(); // Re-render to show recurrence indicator
+}
+
+function loadRecurrenceData(task) {
+    const recurrenceType = document.getElementById('recurrenceType');
+    const skipWeekends = document.getElementById('skipWeekends');
+    const endDate = document.getElementById('recurrenceEndDate');
+
+    if (!task.recurrence) {
+        recurrenceType.value = 'none';
+        skipWeekends.checked = false;
+        endDate.value = '';
+        handleRecurrenceTypeChange();
+        return;
+    }
+
+    const rec = task.recurrence;
+    recurrenceType.value = rec.type;
+    skipWeekends.checked = rec.skipWeekends || false;
+    endDate.value = rec.endDate || '';
+
+    if (rec.type === 'weekly' && rec.weekdays) {
+        document.querySelectorAll('.weekday-btn').forEach(btn => {
+            btn.classList.remove('active');
+            if (rec.weekdays.includes(parseInt(btn.dataset.day))) {
+                btn.classList.add('active');
+            }
+        });
+    } else if (rec.type === 'monthly' && rec.dayOfMonth) {
+        document.getElementById('monthlyDay').value = rec.dayOfMonth;
+    } else if (rec.type === 'custom') {
+        document.getElementById('customInterval').value = rec.interval || 1;
+        document.getElementById('customUnit').value = rec.unit || 'days';
+    }
+
+    handleRecurrenceTypeChange();
+}
+
+function getRecurringTaskInstances(task, originalDateKey, startDate, endDate) {
+    if (!task.recurrence) return [];
+
+    const rec = task.recurrence;
+    const instances = [];
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const originalDate = new Date(originalDateKey);
+
+    let currentDate = new Date(originalDate);
+
+    // Generate instances up to 365 days or endDate (whichever is sooner)
+    const maxDate = new Date(start);
+    maxDate.setDate(maxDate.getDate() + 365);
+    const limitDate = rec.endDate ? new Date(rec.endDate) : maxDate;
+    const effectiveEnd = limitDate < end ? limitDate : end;
+
+    while (currentDate <= effectiveEnd) {
+        // Skip if before start date
+        if (currentDate >= start && currentDate <= effectiveEnd) {
+            const dateKey = formatDateKey(currentDate);
+
+            // Skip weekends if option is enabled
+            if (rec.skipWeekends && (currentDate.getDay() === 0 || currentDate.getDay() === 6)) {
+                // Skip this date
+            } else if (rec.type === 'weekly' && rec.weekdays && rec.weekdays.length > 0) {
+                // Only include if current day matches selected weekdays
+                if (rec.weekdays.includes(currentDate.getDay())) {
+                    instances.push({ ...task, id: `${task.id}-${dateKey}`, originalId: task.id, dateKey });
+                }
+            } else {
+                instances.push({ ...task, id: `${task.id}-${dateKey}`, originalId: task.id, dateKey });
+            }
+        }
+
+        // Move to next occurrence
+        if (rec.type === 'daily') {
+            currentDate.setDate(currentDate.getDate() + 1);
+        } else if (rec.type === 'weekly') {
+            currentDate.setDate(currentDate.getDate() + 1);
+        } else if (rec.type === 'monthly') {
+            currentDate.setMonth(currentDate.getMonth() + 1);
+        } else if (rec.type === 'yearly') {
+            currentDate.setFullYear(currentDate.getFullYear() + 1);
+        } else if (rec.type === 'custom') {
+            if (rec.unit === 'days') {
+                currentDate.setDate(currentDate.getDate() + rec.interval);
+            } else if (rec.unit === 'weeks') {
+                currentDate.setDate(currentDate.getDate() + (rec.interval * 7));
+            } else if (rec.unit === 'months') {
+                currentDate.setMonth(currentDate.getMonth() + rec.interval);
+            }
+        }
+
+        // Safety check to prevent infinite loops
+        if (instances.length > 500) break;
+    }
+
+    return instances;
+}
+
+function formatDateKey(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+// Reminder Functions
+function saveReminderToTask() {
+    const { taskId, dateKey } = taskPopoverState;
+    if (!taskId || !dateKey) return;
+
+    const task = tasks[dateKey]?.find(t => t.id === taskId);
+    if (!task) return;
+
+    const reminderDatetime = document.getElementById('reminderDatetime').value;
+
+    if (reminderDatetime) {
+        task.reminder = reminderDatetime;
+        document.getElementById('removeReminderBtn').style.display = 'flex';
+    } else {
+        delete task.reminder;
+        document.getElementById('removeReminderBtn').style.display = 'none';
+    }
+
+    saveTasksToStorage();
+    renderWeek(); // Re-render to show reminder indicator
+}
+
+function loadReminderData(task) {
+    const reminderDatetime = document.getElementById('reminderDatetime');
+    const removeBtn = document.getElementById('removeReminderBtn');
+
+    if (task.reminder) {
+        reminderDatetime.value = task.reminder;
+        removeBtn.style.display = 'flex';
+    } else {
+        reminderDatetime.value = '';
+        removeBtn.style.display = 'none';
+    }
+}
+
+function removeReminder() {
+    const { taskId, dateKey } = taskPopoverState;
+    if (!taskId || !dateKey) return;
+
+    const task = tasks[dateKey]?.find(t => t.id === taskId);
+    if (!task) return;
+
+    delete task.reminder;
+    document.getElementById('reminderDatetime').value = '';
+    document.getElementById('removeReminderBtn').style.display = 'none';
+
+    saveTasksToStorage();
+    renderWeek();
+}
+
+function checkReminders() {
+    const now = new Date();
+
+    Object.keys(tasks).forEach(dateKey => {
+        tasks[dateKey].forEach(task => {
+            if (task.reminder && !task.reminderShown) {
+                const reminderTime = new Date(task.reminder);
+
+                // Show notification if reminder time has passed
+                if (now >= reminderTime) {
+                    showReminderNotification(task, dateKey);
+                    task.reminderShown = true;
+                    saveTasksToStorage();
+                }
+            }
+        });
+    });
+}
+
+function showReminderNotification(task, dateKey) {
+    // Request permission if not granted
+    if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('Task Reminder', {
+            body: task.text,
+            icon: '/icon.png', // Optional: add an icon
+            badge: '/badge.png', // Optional: add a badge
+            tag: `task-${task.id}`, // Prevent duplicate notifications
+            requireInteraction: false
+        });
+    } else if ('Notification' in window && Notification.permission !== 'denied') {
+        Notification.requestPermission().then(permission => {
+            if (permission === 'granted') {
+                new Notification('Task Reminder', {
+                    body: task.text,
+                    tag: `task-${task.id}`
+                });
+            }
+        });
+    }
+
+    // Always show browser alert as fallback
+    // alert(`Reminder: ${task.text}`);
+}
+
+function requestNotificationPermission() {
+    if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+    }
+}
+
+// Theme Functions
+function setTheme(themeName) {
+    // Remove all theme classes
+    document.body.classList.remove('theme-blue', 'theme-dark', 'theme-minimal');
+
+    // Add new theme class if not default
+    if (themeName && themeName !== 'default') {
+        document.body.classList.add(`theme-${themeName}`);
+    }
+
+    // Save to localStorage
+    localStorage.setItem('weeklyPlannerTheme', themeName || 'default');
+
+    // Update active state on theme buttons
+    document.querySelectorAll('.theme-option').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.theme === (themeName || 'default')) {
+            btn.classList.add('active');
+        }
+    });
+}
+
+function loadThemeFromStorage() {
+    const theme = localStorage.getItem('weeklyPlannerTheme') || 'default';
+    setTheme(theme);
 }
 
 // Apply text formatting in popover
@@ -1336,21 +2231,591 @@ function renderSomedayTasks() {
     }
 }
 
-// Week navigation
+// Render month view
+function renderMonth() {
+    const { dates, year, month } = getMonthDates(currentMonthOffset);
+    const monthContainer = document.getElementById('monthContainer');
+    const monthYearEl = document.getElementById('currentMonthYear');
+
+    // Update header
+    const monthDate = new Date(year, month, 1);
+    monthYearEl.textContent = formatMonthYear(monthDate);
+
+    // Clear container
+    monthContainer.innerHTML = '';
+
+    // Create day names header
+    const dayNames = document.createElement('div');
+    dayNames.className = 'month-day-names';
+    const dayKeys = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    dayKeys.forEach(key => {
+        const dayName = document.createElement('div');
+        dayName.className = 'month-day-name';
+        dayName.textContent = t(`days.${key}`);
+        dayNames.appendChild(dayName);
+    });
+    monthContainer.appendChild(dayNames);
+
+    // Create month grid
+    const monthGrid = document.createElement('div');
+    monthGrid.className = 'month-grid';
+
+    dates.forEach(date => {
+        const dateKey = formatDate(date);
+        const cell = document.createElement('div');
+        cell.className = 'month-day-cell';
+        cell.dataset.date = dateKey;
+
+        if (!isSameMonth(date, month, year)) {
+            cell.classList.add('other-month');
+        }
+        if (isToday(date)) {
+            cell.classList.add('today');
+        }
+        if (isPastDate(date)) {
+            cell.classList.add('past');
+        }
+
+        // Day number
+        const dayNumber = document.createElement('div');
+        dayNumber.className = 'month-day-number';
+        dayNumber.textContent = date.getDate();
+        cell.appendChild(dayNumber);
+
+        // Tasks preview (including recurring tasks)
+        const tasksPreview = document.createElement('div');
+        tasksPreview.className = 'month-tasks-preview';
+
+        // Collect all tasks for this day
+        const allTasksForDay = [];
+        if (tasks[dateKey]) {
+            allTasksForDay.push(...tasks[dateKey]);
+        }
+
+        // Add recurring task instances
+        Object.keys(tasks).forEach(origDateKey => {
+            tasks[origDateKey].forEach(task => {
+                if (task.recurrence) {
+                    const instances = getRecurringTaskInstances(task, origDateKey, dateKey, dateKey);
+                    allTasksForDay.push(...instances);
+                }
+            });
+        });
+
+        if (allTasksForDay.length > 0) {
+            const maxDots = 3;
+            allTasksForDay.slice(0, maxDots).forEach(task => {
+                const dot = document.createElement('div');
+                dot.className = `month-task-dot ${task.color || 'default'}`;
+                tasksPreview.appendChild(dot);
+            });
+
+            if (allTasksForDay.length > maxDots) {
+                const more = document.createElement('div');
+                more.className = 'month-more-tasks';
+                more.textContent = `+${allTasksForDay.length - maxDots} more`;
+                tasksPreview.appendChild(more);
+            }
+        }
+
+        cell.appendChild(tasksPreview);
+
+        // Click to switch to day view
+        cell.addEventListener('click', () => {
+            currentDayDate = dateKey;
+            switchView('day');
+        });
+
+        monthGrid.appendChild(cell);
+    });
+
+    monthContainer.appendChild(monthGrid);
+}
+
+// Render day view
+function renderDay() {
+    const dayContainer = document.getElementById('dayContainer');
+    dayContainer.innerHTML = '';
+
+    const date = currentDayDate ? new Date(currentDayDate + 'T00:00:00') : new Date();
+    const dateKey = formatDate(date);
+    currentDayDate = dateKey;
+
+    // Create header
+    const header = document.createElement('div');
+    header.className = 'day-view-header';
+
+    const titleDiv = document.createElement('div');
+    const title = document.createElement('div');
+    title.className = 'day-view-title';
+    title.textContent = formatDayName(date);
+    titleDiv.appendChild(title);
+
+    const dateText = document.createElement('div');
+    dateText.className = 'day-view-date';
+    dateText.textContent = formatMonthYear(date) + ' ' + date.getDate();
+    titleDiv.appendChild(dateText);
+
+    header.appendChild(titleDiv);
+    dayContainer.appendChild(header);
+
+    // Update month/year display
+    document.getElementById('currentMonthYear').textContent = formatMonthYear(date);
+
+    // Create content
+    const content = document.createElement('div');
+    content.className = 'day-view-content';
+
+    const tasksDiv = document.createElement('div');
+    tasksDiv.className = 'day-view-tasks';
+    tasksDiv.dataset.date = dateKey;
+
+    // Make droppable
+    tasksDiv.addEventListener('dragover', handleDragOver);
+    tasksDiv.addEventListener('drop', (e) => handleDrop(e, dateKey));
+    tasksDiv.addEventListener('dragleave', handleDragLeave);
+
+    // Add touch events
+    tasksDiv.addEventListener('touchmove', handleTouchMove);
+    tasksDiv.addEventListener('touchend', (e) => handleTouchEnd(e, dateKey));
+
+    // Click to add task
+    tasksDiv.addEventListener('click', (e) => {
+        if (e.target === tasksDiv || e.target.classList.contains('day-view-empty')) {
+            createNewTask(dateKey, tasksDiv);
+        }
+    });
+
+    // Render tasks (including recurring tasks)
+    const allTasksForDay = [];
+    if (tasks[dateKey]) {
+        allTasksForDay.push(...tasks[dateKey]);
+    }
+
+    // Add recurring task instances
+    Object.keys(tasks).forEach(origDateKey => {
+        tasks[origDateKey].forEach(task => {
+            if (task.recurrence) {
+                const instances = getRecurringTaskInstances(task, origDateKey, dateKey, dateKey);
+                allTasksForDay.push(...instances);
+            }
+        });
+    });
+
+    if (allTasksForDay.length > 0) {
+        allTasksForDay.forEach(task => {
+            const taskEl = createTaskElement(task, dateKey);
+            tasksDiv.appendChild(taskEl);
+        });
+    } else {
+        const empty = document.createElement('div');
+        empty.className = 'day-view-empty';
+        empty.textContent = 'No tasks for this day. Click to add one.';
+        tasksDiv.appendChild(empty);
+    }
+
+    content.appendChild(tasksDiv);
+    dayContainer.appendChild(content);
+}
+
+// View switching
+function switchView(view) {
+    currentView = view;
+    localStorage.setItem('weeklyPlannerView', view);
+
+    // Hide all views
+    document.getElementById('monthContainer').style.display = 'none';
+    document.getElementById('weekContainer').style.display = 'none';
+    document.getElementById('dayContainer').style.display = 'none';
+
+    // Show/hide someday based on view
+    const somedaySection = document.getElementById('somedaySection');
+    somedaySection.style.display = view === 'day' ? 'none' : 'block';
+
+    // Update view buttons
+    document.querySelectorAll('.view-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.view === view) {
+            btn.classList.add('active');
+        }
+    });
+
+    // Show current view and render
+    if (view === 'month') {
+        document.getElementById('monthContainer').style.display = 'block';
+        renderMonth();
+    } else if (view === 'week') {
+        document.getElementById('weekContainer').style.display = 'block';
+        renderWeek();
+        renderSomedayTasks();
+    } else if (view === 'day') {
+        document.getElementById('dayContainer').style.display = 'block';
+        renderDay();
+    }
+}
+
+// Navigation (works for all views)
+function navigate(direction) {
+    if (currentView === 'month') {
+        currentMonthOffset += direction;
+        renderMonth();
+    } else if (currentView === 'week') {
+        currentWeekOffset += direction;
+        renderWeek();
+    } else if (currentView === 'day') {
+        const currentDate = new Date(currentDayDate + 'T00:00:00');
+        currentDate.setDate(currentDate.getDate() + direction);
+        currentDayDate = formatDate(currentDate);
+        renderDay();
+    }
+}
+
+// Week navigation (deprecated - use navigate instead)
 function navigateWeek(direction) {
     currentWeekOffset += direction;
     renderWeek();
 }
 
+// Search functionality
+let searchState = {
+    query: '',
+    colorFilter: 'all'
+};
+
+function openSearch() {
+    const modal = document.getElementById('searchModal');
+    const input = document.getElementById('searchInput');
+    modal.classList.add('active');
+    input.focus();
+    performSearch();
+}
+
+function closeSearch() {
+    const modal = document.getElementById('searchModal');
+    const input = document.getElementById('searchInput');
+    modal.classList.remove('active');
+    input.value = '';
+    searchState.query = '';
+    searchState.colorFilter = 'all';
+    document.getElementById('searchClearBtn').style.display = 'none';
+
+    // Reset color filter
+    document.querySelectorAll('.search-color-filter').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.color === 'all') {
+            btn.classList.add('active');
+        }
+    });
+}
+
+function performSearch() {
+    const query = searchState.query.toLowerCase();
+    const colorFilter = searchState.colorFilter;
+    const resultsContainer = document.getElementById('searchResults');
+
+    // Clear previous results
+    resultsContainer.innerHTML = '';
+
+    // If no query, show empty state
+    if (query.trim() === '') {
+        const empty = document.createElement('div');
+        empty.className = 'search-empty';
+        empty.textContent = 'Start typing to search tasks...';
+        resultsContainer.appendChild(empty);
+        return;
+    }
+
+    // Search through all tasks
+    const results = [];
+
+    for (const dateKey in tasks) {
+        tasks[dateKey].forEach(task => {
+            // Filter by color if not 'all'
+            if (colorFilter !== 'all' && task.color !== colorFilter) {
+                return;
+            }
+
+            // Search in task text
+            const textContent = task.text.replace(/<[^>]*>/g, '').toLowerCase();
+            if (textContent.includes(query)) {
+                results.push({
+                    task,
+                    dateKey,
+                    textContent
+                });
+            }
+        });
+    }
+
+    // Display results
+    if (results.length === 0) {
+        const noResults = document.createElement('div');
+        noResults.className = 'search-no-results';
+        noResults.textContent = `No tasks found for "${searchState.query}"`;
+        resultsContainer.appendChild(noResults);
+        return;
+    }
+
+    results.forEach(({ task, dateKey, textContent }) => {
+        const resultItem = document.createElement('div');
+        resultItem.className = `search-result-item ${task.color || 'default'}`;
+
+        // Highlight matching text
+        const highlightedText = highlightMatches(task.text, query);
+
+        const textDiv = document.createElement('div');
+        textDiv.className = 'search-result-text';
+        textDiv.innerHTML = highlightedText;
+
+        const dateDiv = document.createElement('div');
+        dateDiv.className = 'search-result-date';
+
+        if (dateKey === 'someday') {
+            dateDiv.textContent = 'Someday';
+        } else {
+            const date = new Date(dateKey + 'T00:00:00');
+            dateDiv.textContent = `${formatDayName(date)}, ${formatMonthYear(date)} ${date.getDate()}`;
+        }
+
+        resultItem.appendChild(textDiv);
+        resultItem.appendChild(dateDiv);
+
+        // Click to open task
+        resultItem.addEventListener('click', () => {
+            closeSearch();
+            // Switch to appropriate view and open task
+            if (dateKey === 'someday') {
+                switchView('week');
+            } else {
+                currentDayDate = dateKey;
+                switchView('day');
+            }
+            // Wait for view to render, then open task popover
+            setTimeout(() => {
+                const taskEl = document.querySelector(`[data-task-id="${task.id}"]`);
+                if (taskEl) {
+                    openTaskPopover(task.id, dateKey, taskEl);
+                }
+            }, 100);
+        });
+
+        resultsContainer.appendChild(resultItem);
+    });
+}
+
+function highlightMatches(text, query) {
+    // Remove HTML tags for matching
+    const textWithoutTags = text.replace(/<[^>]*>/g, '');
+
+    // Find matches and highlight them
+    const regex = new RegExp(`(${escapeRegExp(query)})`, 'gi');
+    const highlighted = textWithoutTags.replace(regex, '<mark>$1</mark>');
+
+    return highlighted;
+}
+
+function escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function setSearchColorFilter(color) {
+    searchState.colorFilter = color;
+
+    // Update active state
+    document.querySelectorAll('.search-color-filter').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.color === color) {
+            btn.classList.add('active');
+        }
+    });
+
+    performSearch();
+}
+
 // Local storage
 function saveTasksToStorage() {
-    localStorage.setItem('weeklyPlannerTasks', JSON.stringify(tasks));
+    // Save tasks to current calendar
+    const currentCalendar = calendars.find(c => c.id === currentCalendarId);
+    if (currentCalendar) {
+        currentCalendar.tasks = tasks;
+        saveCalendarsToStorage();
+    } else {
+        // Fallback to old storage method if calendars not initialized
+        localStorage.setItem('weeklyPlannerTasks', JSON.stringify(tasks));
+    }
 }
 
 function loadTasksFromStorage() {
     const stored = localStorage.getItem('weeklyPlannerTasks');
     if (stored) {
         tasks = JSON.parse(stored);
+    }
+}
+
+// Calendar management functions
+function saveCalendarsToStorage() {
+    localStorage.setItem('weeklyPlannerCalendars', JSON.stringify(calendars));
+    localStorage.setItem('weeklyPlannerCurrentCalendar', currentCalendarId);
+}
+
+function loadCalendarsFromStorage() {
+    const stored = localStorage.getItem('weeklyPlannerCalendars');
+    if (stored) {
+        calendars = JSON.parse(stored);
+    }
+
+    // If no calendars exist, create default calendar
+    if (calendars.length === 0) {
+        calendars = [{
+            id: 'default',
+            name: 'My Calendar',
+            color: '#818cf8',
+            tasks: {}
+        }];
+    }
+
+    // Load current calendar
+    const storedCurrent = localStorage.getItem('weeklyPlannerCurrentCalendar');
+    currentCalendarId = storedCurrent || calendars[0].id;
+
+    // Load tasks from current calendar
+    const currentCalendar = calendars.find(c => c.id === currentCalendarId);
+    if (currentCalendar) {
+        tasks = currentCalendar.tasks || {};
+    }
+}
+
+function switchCalendar(calendarId) {
+    // Save current calendar's tasks
+    const currentCalendar = calendars.find(c => c.id === currentCalendarId);
+    if (currentCalendar) {
+        currentCalendar.tasks = tasks;
+    }
+
+    // Switch to new calendar
+    currentCalendarId = calendarId;
+    const newCalendar = calendars.find(c => c.id === calendarId);
+    if (newCalendar) {
+        tasks = newCalendar.tasks || {};
+        saveCalendarsToStorage();
+        renderCalendarList();
+        switchView(currentView); // Re-render current view
+    }
+}
+
+function createCalendar(name) {
+    const newCalendar = {
+        id: 'cal-' + Date.now(),
+        name: name || 'New Calendar',
+        color: '#818cf8',
+        tasks: {}
+    };
+
+    calendars.push(newCalendar);
+    saveCalendarsToStorage();
+    renderCalendarList();
+    return newCalendar;
+}
+
+function deleteCalendar(calendarId) {
+    // Don't allow deleting the last calendar
+    if (calendars.length <= 1) {
+        alert('Cannot delete the last calendar');
+        return;
+    }
+
+    // Don't allow deleting current calendar without switching
+    if (calendarId === currentCalendarId) {
+        alert('Please switch to another calendar before deleting this one');
+        return;
+    }
+
+    calendars = calendars.filter(c => c.id !== calendarId);
+    saveCalendarsToStorage();
+    renderCalendarList();
+}
+
+function renameCalendar(calendarId, newName) {
+    const calendar = calendars.find(c => c.id === calendarId);
+    if (calendar) {
+        calendar.name = newName;
+        saveCalendarsToStorage();
+        renderCalendarList();
+    }
+}
+
+function renderCalendarList() {
+    const calendarList = document.getElementById('calendarList');
+    const currentCalendarName = document.getElementById('currentCalendarName');
+
+    if (!calendarList || !currentCalendarName) return;
+
+    // Update current calendar name in header
+    const currentCalendar = calendars.find(c => c.id === currentCalendarId);
+    if (currentCalendar) {
+        currentCalendarName.textContent = currentCalendar.name;
+    }
+
+    // Render calendar list
+    calendarList.innerHTML = calendars.map(calendar => {
+        const isActive = calendar.id === currentCalendarId;
+        return `
+            <div class="calendar-dropdown-item ${isActive ? 'active' : ''}" data-calendar-id="${calendar.id}">
+                <div class="calendar-item-left">
+                    <div class="calendar-color-dot" style="background-color: ${calendar.color}"></div>
+                    <span class="calendar-name">${calendar.name}</span>
+                </div>
+                <div class="calendar-item-actions">
+                    ${!isActive ? `<button class="calendar-action-btn delete-calendar-btn" data-calendar-id="${calendar.id}" title="Delete calendar">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        </svg>
+                    </button>` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    // Add event listeners to calendar items
+    calendarList.querySelectorAll('.calendar-dropdown-item').forEach(item => {
+        const calendarId = item.dataset.calendarId;
+
+        item.addEventListener('click', (e) => {
+            // Don't trigger if clicking on delete button
+            if (e.target.closest('.delete-calendar-btn')) return;
+
+            if (calendarId !== currentCalendarId) {
+                switchCalendar(calendarId);
+                toggleCalendarDropdown(); // Close dropdown
+            }
+        });
+    });
+
+    // Add event listeners to delete buttons
+    calendarList.querySelectorAll('.delete-calendar-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const calendarId = btn.dataset.calendarId;
+            const calendar = calendars.find(c => c.id === calendarId);
+            if (calendar && confirm(`Delete "${calendar.name}"?`)) {
+                deleteCalendar(calendarId);
+            }
+        });
+    });
+}
+
+function toggleCalendarDropdown() {
+    const dropdown = document.getElementById('calendarDropdown');
+    if (dropdown) {
+        dropdown.classList.toggle('active');
+    }
+}
+
+function openAddCalendarDialog() {
+    const name = prompt('Enter calendar name:');
+    if (name && name.trim()) {
+        createCalendar(name.trim());
     }
 }
 
@@ -1395,6 +2860,182 @@ function handleShare() {
             console.log('Error copying to clipboard:', error);
         });
     }
+}
+
+// Calendar sync functions - Seamless integration
+function openCalendarSyncModal() {
+    closeMenu();
+    const modal = document.getElementById('calendarSyncModal');
+    modal.classList.add('active');
+}
+
+function closeCalendarSyncModal() {
+    const modal = document.getElementById('calendarSyncModal');
+    modal.classList.remove('active');
+}
+
+function generateICSContent() {
+    const currentCalendar = calendars.find(c => c.id === currentCalendarId);
+    if (!currentCalendar) return '';
+
+    // Build iCalendar file content
+    let icsContent = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Weekly Planner//EN',
+        `X-WR-CALNAME:${currentCalendar.name}`,
+        'X-WR-TIMEZONE:UTC',
+        'CALSCALE:GREGORIAN',
+        'METHOD:PUBLISH'
+    ];
+
+    // Add all tasks as events
+    Object.keys(currentCalendar.tasks || {}).forEach(dateKey => {
+        const tasksForDate = currentCalendar.tasks[dateKey] || [];
+        tasksForDate.forEach(task => {
+            const date = new Date(dateKey);
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const dateStr = `${year}${month}${day}`;
+
+            // Create unique ID for event
+            const uid = `task-${task.id}@weeklyplanner`;
+
+            // Format description with notes and subtasks
+            let description = task.text || '';
+            if (task.notes) {
+                description += '\\n\\nNotes: ' + task.notes.replace(/\n/g, '\\n');
+            }
+            if (task.subtasks && task.subtasks.length > 0) {
+                description += '\\n\\nSubtasks:';
+                task.subtasks.forEach(st => {
+                    description += `\\n- [${st.completed ? 'X' : ' '}] ${st.text}`;
+                });
+            }
+
+            icsContent.push(
+                'BEGIN:VEVENT',
+                `UID:${uid}`,
+                `DTSTAMP:${dateStr}T120000Z`,
+                `DTSTART;VALUE=DATE:${dateStr}`,
+                `SUMMARY:${(task.text || 'Untitled Task').replace(/\n/g, ' ')}`,
+                `DESCRIPTION:${description}`,
+                `STATUS:${task.completed ? 'COMPLETED' : 'NEEDS-ACTION'}`,
+                task.color ? `CATEGORIES:${task.color}` : '',
+                'END:VEVENT'
+            );
+        });
+    });
+
+    icsContent.push('END:VCALENDAR');
+    return icsContent.join('\r\n');
+}
+
+function addToGoogleCalendar() {
+    const icsContent = generateICSContent();
+
+    // Create blob and download
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const currentCalendar = calendars.find(c => c.id === currentCalendarId);
+    link.download = `${(currentCalendar?.name || 'calendar').replace(/\s+/g, '_')}.ics`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    closeCalendarSyncModal();
+
+    // Show instructions
+    setTimeout(() => {
+        alert('Calendar file downloaded!\n\nTo add to Google Calendar:\n1. Open Google Calendar (calendar.google.com)\n2. Click the "+" next to "Other calendars"\n3. Select "Import"\n4. Choose the downloaded .ics file\n5. Click "Import"');
+    }, 500);
+}
+
+function addToAppleCalendar() {
+    const icsContent = generateICSContent();
+
+    // Create blob
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+
+    // Create link
+    const link = document.createElement('a');
+    const currentCalendar = calendars.find(c => c.id === currentCalendarId);
+    const fileName = `${(currentCalendar?.name || 'calendar').replace(/\s+/g, '_')}.ics`;
+
+    // Download the file
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    closeCalendarSyncModal();
+
+    // Show platform-specific instructions
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isMac = /Mac/.test(navigator.platform);
+
+    setTimeout(() => {
+        if (isIOS) {
+            alert('Calendar file downloaded!\n\nTo add to Apple Calendar on iOS:\n1. Tap the downloaded .ics file\n2. Tap "Add All" to add events to your calendar\n3. Events will appear in your default calendar');
+        } else if (isMac) {
+            alert('Calendar file downloaded!\n\nTo add to Apple Calendar on Mac:\n1. Double-click the downloaded .ics file\n2. Calendar app will open automatically\n3. Click "Add" to import the events');
+        } else {
+            alert('Calendar file downloaded!\n\nTo add to Apple Calendar:\n1. Open the downloaded .ics file\n2. Your calendar app will open automatically\n3. Click "Add" or "Import" to add the events');
+        }
+    }, 500);
+}
+
+function addToOutlookCalendar() {
+    const icsContent = generateICSContent();
+
+    // Create blob and download
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const currentCalendar = calendars.find(c => c.id === currentCalendarId);
+    link.download = `${(currentCalendar?.name || 'calendar').replace(/\s+/g, '_')}.ics`;
+    link.href = url;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    closeCalendarSyncModal();
+
+    // Show instructions
+    setTimeout(() => {
+        alert('Calendar file downloaded!\n\nTo add to Outlook Calendar:\n\nDesktop:\n1. Open Outlook\n2. Go to File > Open & Export > Import/Export\n3. Select "Import an iCalendar (.ics) file"\n4. Choose the downloaded file\n\nOutlook.com:\n1. Open Outlook.com\n2. Click Calendar\n3. Click "Add calendar" > "Upload from file"\n4. Choose the downloaded file');
+    }, 500);
+}
+
+function addToOtherCalendar() {
+    const icsContent = generateICSContent();
+
+    // Create blob and download
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const currentCalendar = calendars.find(c => c.id === currentCalendarId);
+    link.download = `${(currentCalendar?.name || 'calendar').replace(/\s+/g, '_')}.ics`;
+    link.href = url;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    closeCalendarSyncModal();
+
+    // Show instructions
+    setTimeout(() => {
+        alert('Calendar file downloaded!\n\nThis .ics file works with most calendar apps including:\n- Google Calendar\n- Apple Calendar\n- Outlook\n- Yahoo Calendar\n- Thunderbird\n\nSimply import the file in your calendar app\'s import/add calendar feature.');
+    }, 500);
 }
 
 function openSupportModal() {
@@ -1500,9 +3141,17 @@ function setTaskColorFromPopover(color) {
 
 // Event listeners
 function setupEventListeners() {
-    // Week navigation
-    document.getElementById('prevWeekBtn').addEventListener('click', () => navigateWeek(-1));
-    document.getElementById('nextWeekBtn').addEventListener('click', () => navigateWeek(1));
+    // View switcher
+    document.querySelectorAll('.view-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const view = btn.dataset.view;
+            switchView(view);
+        });
+    });
+
+    // Navigation (works for all views)
+    document.getElementById('prevBtn').addEventListener('click', () => navigate(-1));
+    document.getElementById('nextBtn').addEventListener('click', () => navigate(1));
 
     // Color picker
     document.getElementById('colorPickerModal').addEventListener('click', (e) => {
@@ -1521,6 +3170,19 @@ function setupEventListeners() {
     // Task popover
     document.getElementById('closeTaskPopover').addEventListener('click', closeTaskPopover);
     document.getElementById('taskPopoverBackdrop').addEventListener('click', closeTaskPopover);
+
+    // Share button
+    document.getElementById('taskShareBtn').addEventListener('click', () => {
+        shareTask();
+    });
+
+    // Shared task modal
+    document.getElementById('closeSharedTaskBtn').addEventListener('click', closeSharedTaskModal);
+    document.getElementById('sharedTaskModal').addEventListener('click', (e) => {
+        if (e.target.id === 'sharedTaskModal') {
+            closeSharedTaskModal();
+        }
+    });
 
     // Three-dots menu in popover
     document.getElementById('taskPopoverMenuBtn').addEventListener('click', (e) => {
@@ -1555,6 +3217,19 @@ function setupEventListeners() {
     // File input
     document.getElementById('fileInput').addEventListener('change', handleFileInput);
 
+    // Add subtask button
+    document.getElementById('addSubtaskBtn').addEventListener('click', addSubtask);
+
+    // Custom colors
+    document.getElementById('addCustomColorBtn').addEventListener('click', addCustomColor);
+    document.getElementById('customColorHex').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            addCustomColor();
+        }
+    });
+    syncColorInputs();
+
     // Menu
     document.getElementById('menuBtn').addEventListener('click', (e) => {
         e.stopPropagation();
@@ -1564,6 +3239,21 @@ function setupEventListeners() {
     document.getElementById('printBtn').addEventListener('click', handlePrint);
     document.getElementById('shareBtn').addEventListener('click', handleShare);
     document.getElementById('supportBtn').addEventListener('click', openSupportModal);
+
+    // Calendar sync modal
+    document.getElementById('addToCalendarBtn').addEventListener('click', openCalendarSyncModal);
+    document.getElementById('closeCalendarSyncBtn').addEventListener('click', closeCalendarSyncModal);
+    document.getElementById('calendarSyncModal').addEventListener('click', (e) => {
+        if (e.target.id === 'calendarSyncModal') {
+            closeCalendarSyncModal();
+        }
+    });
+
+    // Platform-specific calendar buttons
+    document.getElementById('addToGoogleBtn').addEventListener('click', addToGoogleCalendar);
+    document.getElementById('addToAppleBtn').addEventListener('click', addToAppleCalendar);
+    document.getElementById('addToOutlookBtn').addEventListener('click', addToOutlookCalendar);
+    document.getElementById('addToOtherBtn').addEventListener('click', addToOtherCalendar);
 
     document.getElementById('languageSelect').addEventListener('change', (e) => {
         changeLanguage(e.target.value);
@@ -1593,6 +3283,92 @@ function setupEventListeners() {
         }
     });
 
+    // Search
+    document.getElementById('searchBtn').addEventListener('click', openSearch);
+    document.getElementById('searchCloseBtn').addEventListener('click', closeSearch);
+    document.getElementById('searchModal').addEventListener('click', (e) => {
+        if (e.target.id === 'searchModal') {
+            closeSearch();
+        }
+    });
+
+    document.getElementById('searchInput').addEventListener('input', (e) => {
+        searchState.query = e.target.value;
+        const clearBtn = document.getElementById('searchClearBtn');
+        clearBtn.style.display = e.target.value ? 'block' : 'none';
+        performSearch();
+    });
+
+    document.getElementById('searchClearBtn').addEventListener('click', () => {
+        document.getElementById('searchInput').value = '';
+        document.getElementById('searchClearBtn').style.display = 'none';
+        searchState.query = '';
+        performSearch();
+    });
+
+    document.querySelectorAll('.search-color-filter').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const color = btn.dataset.color;
+            setSearchColorFilter(color);
+        });
+    });
+
+    // Recurrence event listeners
+    document.getElementById('recurrenceType').addEventListener('change', handleRecurrenceTypeChange);
+
+    document.querySelectorAll('.weekday-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            toggleWeekday(parseInt(btn.dataset.day));
+        });
+    });
+
+    document.getElementById('skipWeekends').addEventListener('change', saveRecurrenceToTask);
+    document.getElementById('recurrenceEndDate').addEventListener('change', saveRecurrenceToTask);
+    document.getElementById('monthlyDay').addEventListener('change', saveRecurrenceToTask);
+    document.getElementById('customInterval').addEventListener('change', saveRecurrenceToTask);
+    document.getElementById('customUnit').addEventListener('change', saveRecurrenceToTask);
+
+    // Reminder event listeners
+    document.getElementById('reminderDatetime').addEventListener('change', saveReminderToTask);
+    document.getElementById('removeReminderBtn').addEventListener('click', removeReminder);
+
+    // Theme event listeners
+    document.querySelectorAll('.theme-option').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const theme = btn.dataset.theme;
+            setTheme(theme);
+            closeMenu(); // Close menu after selecting theme
+        });
+    });
+
+    // Calendar event listeners
+    const calendarSelectorBtn = document.getElementById('calendarSelectorBtn');
+    const calendarDropdown = document.getElementById('calendarDropdown');
+    const addCalendarBtn = document.getElementById('addCalendarBtn');
+
+    if (calendarSelectorBtn) {
+        calendarSelectorBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleCalendarDropdown();
+        });
+    }
+
+    if (addCalendarBtn) {
+        addCalendarBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openAddCalendarDialog();
+            toggleCalendarDropdown(); // Close dropdown after opening dialog
+        });
+    }
+
+    // Close calendar dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        if (calendarDropdown && !calendarDropdown.contains(e.target) && !calendarSelectorBtn.contains(e.target)) {
+            calendarDropdown.classList.remove('active');
+        }
+    });
+
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
@@ -1600,6 +3376,13 @@ function setupEventListeners() {
             closeSupportModal();
             closeMenu();
             closeTaskPopover();
+            closeSearch();
+            closeSharedTaskModal();
+            closeCalendarSyncModal();
+            // Close calendar dropdown
+            if (calendarDropdown) {
+                calendarDropdown.classList.remove('active');
+            }
         }
     });
 }

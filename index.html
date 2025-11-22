@@ -11,8 +11,74 @@
     <div class="app-container">
         <!-- Header -->
         <header class="header">
-            <div class="current-month-year" id="currentMonthYear"></div>
+            <div class="header-left">
+                <div class="current-month-year" id="currentMonthYear"></div>
+                <div class="calendar-selector">
+                    <button class="calendar-selector-btn" id="calendarSelectorBtn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="16" y1="2" x2="16" y2="6"></line>
+                            <line x1="8" y1="2" x2="8" y2="6"></line>
+                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                        </svg>
+                        <span id="currentCalendarName">My Calendar</span>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </button>
+                    <div class="calendar-dropdown" id="calendarDropdown">
+                        <div class="calendar-list" id="calendarList">
+                            <!-- Calendars will be rendered here -->
+                        </div>
+                        <div class="calendar-dropdown-divider"></div>
+                        <button class="calendar-dropdown-item add-calendar" id="addCalendarBtn">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                            <span>New Calendar</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
             <div class="header-actions">
+                <!-- View Switcher -->
+                <div class="view-switcher">
+                    <button class="view-btn" data-view="month" aria-label="Month view">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="16" y1="2" x2="16" y2="6"></line>
+                            <line x1="8" y1="2" x2="8" y2="6"></line>
+                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                            <line x1="3" y1="14" x2="21" y2="14"></line>
+                            <line x1="8" y1="10" x2="8" y2="22"></line>
+                            <line x1="16" y1="10" x2="16" y2="22"></line>
+                        </svg>
+                    </button>
+                    <button class="view-btn active" data-view="week" aria-label="Week view">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="16" y1="2" x2="16" y2="6"></line>
+                            <line x1="8" y1="2" x2="8" y2="6"></line>
+                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                        </svg>
+                    </button>
+                    <button class="view-btn" data-view="day" aria-label="Day view">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="16" y1="2" x2="16" y2="6"></line>
+                            <line x1="8" y1="2" x2="8" y2="6"></line>
+                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                            <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"></path>
+                        </svg>
+                    </button>
+                </div>
+                <button class="icon-btn" id="searchBtn" aria-label="Search">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                </button>
                 <button class="icon-btn" id="userBtn" aria-label="User">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
@@ -26,12 +92,12 @@
                         <circle cx="12" cy="19" r="1"></circle>
                     </svg>
                 </button>
-                <button class="icon-btn" id="prevWeekBtn" aria-label="Previous week">
+                <button class="icon-btn nav-btn" id="prevBtn" aria-label="Previous">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="15 18 9 12 15 6"></polyline>
                     </svg>
                 </button>
-                <button class="icon-btn" id="nextWeekBtn" aria-label="Next week">
+                <button class="icon-btn nav-btn" id="nextBtn" aria-label="Next">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="9 18 15 12 9 6"></polyline>
                     </svg>
@@ -64,6 +130,65 @@
                     <line x1="12" y1="17" x2="12.01" y2="17"></line>
                 </svg>
                 <span data-i18n="menu.support">Support</span>
+            </button>
+            <div class="menu-divider"></div>
+            <div class="menu-section-title">Calendar Sync</div>
+            <button class="menu-item" id="addToCalendarBtn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                    <line x1="12" y1="14" x2="12" y2="18"></line>
+                    <line x1="10" y1="16" x2="14" y2="16"></line>
+                </svg>
+                <span>Add to Calendar App</span>
+            </button>
+            <div class="menu-divider"></div>
+            <div class="menu-section-title">Theme</div>
+            <button class="menu-item theme-option" data-theme="default">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="5"></circle>
+                    <line x1="12" y1="1" x2="12" y2="3"></line>
+                    <line x1="12" y1="21" x2="12" y2="23"></line>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                    <line x1="1" y1="12" x2="3" y2="12"></line>
+                    <line x1="21" y1="12" x2="23" y2="12"></line>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                </svg>
+                <span>White/Paper</span>
+            </button>
+            <button class="menu-item theme-option" data-theme="blue">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                </svg>
+                <span>Cold Blue</span>
+            </button>
+            <button class="menu-item theme-option" data-theme="dark">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                </svg>
+                <span>Dark Mode</span>
+            </button>
+            <button class="menu-item theme-option" data-theme="minimal">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                </svg>
+                <span>Minimal/Zen</span>
+            </button>
+            <div class="menu-divider"></div>
+            <div class="menu-section-title">Color Palettes</div>
+            <button class="menu-item" id="paletteManagerBtn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="13.5" cy="6.5" r=".5"></circle>
+                    <circle cx="17.5" cy="10.5" r=".5"></circle>
+                    <circle cx="8.5" cy="7.5" r=".5"></circle>
+                    <circle cx="6.5" cy="12.5" r=".5"></circle>
+                    <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"></path>
+                </svg>
+                <span>Manage Palettes</span>
             </button>
             <div class="menu-divider"></div>
             <div class="menu-item language-selector">
@@ -110,15 +235,217 @@
             </div>
         </div>
 
+        <!-- Palette Manager Modal -->
+        <div class="palette-modal" id="paletteModal">
+            <div class="palette-content">
+                <div class="palette-header">
+                    <h2>Color Palettes</h2>
+                    <button class="close-btn" id="closePaletteBtn" aria-label="Close">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                <div class="palette-body">
+                    <div class="palette-section">
+                        <div class="palette-section-header">
+                            <h3>Current Palette</h3>
+                            <select id="paletteSelect" class="palette-select">
+                                <option value="default">Default</option>
+                            </select>
+                        </div>
+                        <div class="palette-colors" id="currentPaletteColors">
+                            <!-- Colors will be rendered here -->
+                        </div>
+                    </div>
+
+                    <div class="palette-section">
+                        <h3>Create New Palette</h3>
+                        <div class="create-palette-form">
+                            <input type="text" id="newPaletteName" class="palette-name-input" placeholder="Palette name (e.g., Work, Personal)">
+                            <button class="palette-btn primary" id="createPaletteBtn">Create Palette</button>
+                        </div>
+                    </div>
+
+                    <div class="palette-section">
+                        <h3>Import/Export</h3>
+                        <div class="palette-actions">
+                            <button class="palette-btn" id="exportPaletteBtn">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="7 10 12 15 17 10"></polyline>
+                                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                                </svg>
+                                Export Current
+                            </button>
+                            <button class="palette-btn" id="importPaletteBtn">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="17 8 12 3 7 8"></polyline>
+                                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                                </svg>
+                                Import Palette
+                            </button>
+                            <input type="file" id="paletteFileInput" accept=".json" style="display: none;">
+                        </div>
+                    </div>
+
+                    <div class="palette-section" id="deletePaletteSection" style="display: none;">
+                        <button class="palette-btn danger" id="deletePaletteBtn">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                            Delete Current Palette
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add to Calendar Modal -->
+        <div class="calendar-sync-modal" id="calendarSyncModal">
+            <div class="calendar-sync-content">
+                <div class="calendar-sync-header">
+                    <h2>Add to Calendar App</h2>
+                    <button class="close-btn" id="closeCalendarSyncBtn" aria-label="Close">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                <div class="calendar-sync-body">
+                    <p class="calendar-sync-description">Choose your calendar app to sync your tasks seamlessly:</p>
+
+                    <div class="calendar-app-options">
+                        <button class="calendar-app-btn" id="addToGoogleBtn">
+                            <div class="calendar-app-icon google-icon">
+                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                            </div>
+                            <div class="calendar-app-info">
+                                <h3>Google Calendar</h3>
+                                <p>Sync with your Google account</p>
+                            </div>
+                        </button>
+
+                        <button class="calendar-app-btn" id="addToAppleBtn">
+                            <div class="calendar-app-icon apple-icon">
+                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                            </div>
+                            <div class="calendar-app-info">
+                                <h3>Apple Calendar</h3>
+                                <p>For iPhone, iPad, and Mac</p>
+                            </div>
+                        </button>
+
+                        <button class="calendar-app-btn" id="addToOutlookBtn">
+                            <div class="calendar-app-icon outlook-icon">
+                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                            </div>
+                            <div class="calendar-app-info">
+                                <h3>Outlook Calendar</h3>
+                                <p>For Microsoft Outlook</p>
+                            </div>
+                        </button>
+
+                        <button class="calendar-app-btn" id="addToOtherBtn">
+                            <div class="calendar-app-icon other-icon">
+                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="7 10 12 15 17 10"></polyline>
+                                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                                </svg>
+                            </div>
+                            <div class="calendar-app-info">
+                                <h3>Other Calendar App</h3>
+                                <p>Download .ics file</p>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Month view -->
+        <div class="month-container" id="monthContainer" style="display: none;">
+            <!-- Month calendar will be generated by JavaScript -->
+        </div>
+
         <!-- Week view -->
         <div class="week-container" id="weekContainer">
             <!-- Days will be generated by JavaScript -->
         </div>
 
+        <!-- Day view -->
+        <div class="day-container" id="dayContainer" style="display: none;">
+            <!-- Single day will be generated by JavaScript -->
+        </div>
+
         <!-- Someday section -->
-        <div class="someday-section">
+        <div class="someday-section" id="somedaySection">
             <div class="someday-header">Someday</div>
             <div class="day-tasks" id="somedayTasks" data-day="someday"></div>
+        </div>
+    </div>
+
+    <!-- Search Modal -->
+    <div class="search-modal" id="searchModal">
+        <div class="search-modal-content">
+            <div class="search-header">
+                <div class="search-input-wrapper">
+                    <svg class="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                    <input type="text" class="search-input" id="searchInput" placeholder="Search tasks..." autofocus>
+                    <button class="search-clear-btn" id="searchClearBtn" style="display: none;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                <button class="search-close-btn" id="searchCloseBtn">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="search-filters">
+                <div class="search-filter-label">Filter by color:</div>
+                <div class="search-color-filters">
+                    <button class="search-color-filter active" data-color="all">All</button>
+                    <button class="search-color-filter" data-color="default" style="background-color: #fef3c7"></button>
+                    <button class="search-color-filter" data-color="green" style="background-color: #6ee7b7"></button>
+                    <button class="search-color-filter" data-color="blue" style="background-color: #93c5fd"></button>
+                    <button class="search-color-filter" data-color="purple" style="background-color: #c4b5fd"></button>
+                    <button class="search-color-filter" data-color="pink" style="background-color: #f9a8d4"></button>
+                    <button class="search-color-filter" data-color="red" style="background-color: #fca5a5"></button>
+                    <button class="search-color-filter" data-color="orange" style="background-color: #fdba74"></button>
+                    <button class="search-color-filter" data-color="gray" style="background-color: #d1d5db"></button>
+                </div>
+            </div>
+            <div class="search-results" id="searchResults">
+                <div class="search-empty">Start typing to search tasks...</div>
+            </div>
         </div>
     </div>
 
@@ -146,6 +473,15 @@
         <div class="task-popover-header">
             <div class="task-popover-title">Edit Task</div>
             <div class="task-popover-header-actions">
+                <button class="task-share-btn" id="taskShareBtn" aria-label="Share task" title="Share task">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="18" cy="5" r="3"></circle>
+                        <circle cx="6" cy="12" r="3"></circle>
+                        <circle cx="18" cy="19" r="3"></circle>
+                        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                    </svg>
+                </button>
                 <button class="task-popover-menu-btn" id="taskPopoverMenuBtn" aria-label="Menu">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="3" y1="12" x2="21" y2="12"></line>
@@ -223,24 +559,190 @@
                 </button>
                 <input type="file" id="fileInput" class="file-input-hidden" multiple>
             </div>
-            <textarea class="task-editor-textarea" id="taskEditorTextarea" placeholder="Enter task details..."></textarea>
+            <textarea class="task-editor-textarea" id="taskEditorTextarea" placeholder="Enter task title..."></textarea>
+
+            <!-- Notes section -->
+            <div class="task-notes-section">
+                <label class="task-section-label">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                        <polyline points="10 9 9 9 8 9"></polyline>
+                    </svg>
+                    Notes
+                </label>
+                <textarea class="task-notes-textarea" id="taskNotesTextarea" placeholder="Add notes or description..."></textarea>
+            </div>
+
+            <!-- Subtasks section -->
+            <div class="task-subtasks-section">
+                <div class="task-section-header">
+                    <label class="task-section-label">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="9 11 12 14 22 4"></polyline>
+                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                        </svg>
+                        Subtasks
+                    </label>
+                    <span class="subtasks-progress" id="subtasksProgress"></span>
+                </div>
+                <div class="subtasks-list" id="subtasksList"></div>
+                <button class="add-subtask-btn" id="addSubtaskBtn">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    Add subtask
+                </button>
+            </div>
 
             <!-- Attached files display -->
             <div class="attached-files" id="attachedFiles"></div>
 
+            <!-- Recurrence section -->
+            <div class="task-recurrence-section">
+                <label class="task-section-label">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M23 4v6h-6"></path>
+                        <path d="M1 20v-6h6"></path>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                    </svg>
+                    Repeat
+                </label>
+                <select class="recurrence-select" id="recurrenceType">
+                    <option value="none">Does not repeat</option>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                    <option value="custom">Custom</option>
+                </select>
+
+                <!-- Weekly options -->
+                <div class="recurrence-options weekly-options" id="weeklyOptions" style="display: none;">
+                    <div class="weekday-selector">
+                        <button class="weekday-btn" data-day="0" type="button">S</button>
+                        <button class="weekday-btn" data-day="1" type="button">M</button>
+                        <button class="weekday-btn" data-day="2" type="button">T</button>
+                        <button class="weekday-btn" data-day="3" type="button">W</button>
+                        <button class="weekday-btn" data-day="4" type="button">T</button>
+                        <button class="weekday-btn" data-day="5" type="button">F</button>
+                        <button class="weekday-btn" data-day="6" type="button">S</button>
+                    </div>
+                </div>
+
+                <!-- Monthly options -->
+                <div class="recurrence-options monthly-options" id="monthlyOptions" style="display: none;">
+                    <label class="recurrence-option-label">
+                        Day of month:
+                        <input type="number" class="monthly-day-input" id="monthlyDay" min="1" max="31" value="1">
+                    </label>
+                </div>
+
+                <!-- Custom options -->
+                <div class="recurrence-options custom-options" id="customOptions" style="display: none;">
+                    <div class="custom-recurrence-builder">
+                        <label class="recurrence-option-label">
+                            Every
+                            <input type="number" class="custom-interval-input" id="customInterval" min="1" value="1">
+                            <select class="custom-unit-select" id="customUnit">
+                                <option value="days">days</option>
+                                <option value="weeks">weeks</option>
+                                <option value="months">months</option>
+                            </select>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Common options for all recurring tasks -->
+                <div class="recurrence-common-options" id="recurrenceCommonOptions" style="display: none;">
+                    <label class="recurrence-checkbox-label">
+                        <input type="checkbox" id="skipWeekends" class="recurrence-checkbox">
+                        <span>Skip weekends</span>
+                    </label>
+                    <label class="recurrence-option-label">
+                        End date:
+                        <input type="date" class="recurrence-end-date" id="recurrenceEndDate">
+                    </label>
+                </div>
+            </div>
+
+            <!-- Reminders section -->
+            <div class="task-reminders-section">
+                <label class="task-section-label">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                    Reminder
+                </label>
+                <div class="reminder-controls">
+                    <input type="datetime-local" class="reminder-datetime" id="reminderDatetime">
+                    <button class="remove-reminder-btn" id="removeReminderBtn" style="display: none;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
             <!-- Color picker in popover -->
             <div class="task-color-picker">
                 <div class="color-picker-label">Task Color:</div>
-                <div class="color-options-inline">
-                    <button class="color-option-small" data-color="default" style="background-color: #fef3c7" title="Default"></button>
-                    <button class="color-option-small" data-color="green" style="background-color: #6ee7b7" title="Green"></button>
-                    <button class="color-option-small" data-color="blue" style="background-color: #93c5fd" title="Blue"></button>
-                    <button class="color-option-small" data-color="purple" style="background-color: #c4b5fd" title="Purple"></button>
-                    <button class="color-option-small" data-color="pink" style="background-color: #f9a8d4" title="Pink"></button>
-                    <button class="color-option-small" data-color="red" style="background-color: #fca5a5" title="Red"></button>
-                    <button class="color-option-small" data-color="orange" style="background-color: #fdba74" title="Orange"></button>
-                    <button class="color-option-small" data-color="gray" style="background-color: #d1d5db" title="Gray"></button>
+
+                <!-- Default colors -->
+                <div class="color-section">
+                    <div class="color-section-title">Default</div>
+                    <div class="color-options-inline">
+                        <button class="color-option-small" data-color="default" style="background-color: #fef3c7" title="Default"></button>
+                        <button class="color-option-small" data-color="green" style="background-color: #6ee7b7" title="Green"></button>
+                        <button class="color-option-small" data-color="blue" style="background-color: #93c5fd" title="Blue"></button>
+                        <button class="color-option-small" data-color="purple" style="background-color: #c4b5fd" title="Purple"></button>
+                        <button class="color-option-small" data-color="pink" style="background-color: #f9a8d4" title="Pink"></button>
+                        <button class="color-option-small" data-color="red" style="background-color: #fca5a5" title="Red"></button>
+                        <button class="color-option-small" data-color="orange" style="background-color: #fdba74" title="Orange"></button>
+                        <button class="color-option-small" data-color="gray" style="background-color: #d1d5db" title="Gray"></button>
+                    </div>
                 </div>
+
+                <!-- Custom colors -->
+                <div class="color-section" id="customColorsSection" style="display: none;">
+                    <div class="color-section-title">Custom</div>
+                    <div class="color-options-inline" id="customColorsList"></div>
+                </div>
+
+                <!-- Add custom color -->
+                <div class="custom-color-input">
+                    <input type="color" id="customColorPicker" class="color-input" title="Pick a color">
+                    <input type="text" id="customColorHex" class="hex-input" placeholder="#000000" maxlength="7">
+                    <button class="add-color-btn" id="addCustomColorBtn" title="Add custom color">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Shared Task View Modal -->
+    <div class="shared-task-modal" id="sharedTaskModal">
+        <div class="shared-task-content">
+            <div class="shared-task-header">
+                <h2>Shared Task</h2>
+                <button class="close-btn" id="closeSharedTaskBtn" aria-label="Close">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="shared-task-body" id="sharedTaskBody">
+                <!-- Task details will be rendered here -->
             </div>
         </div>
     </div>

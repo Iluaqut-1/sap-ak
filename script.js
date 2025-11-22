@@ -3556,29 +3556,153 @@ function handlePrint() {
 
 function handleShare() {
     closeMenu();
-    const weekDates = getWeekDates(currentWeekOffset);
-    const startDate = formatDate(weekDates[0]);
-    const endDate = formatDate(weekDates[6]);
-    const title = `Weekly Planner - ${formatMonthYear(weekDates[0])}`;
-    const text = `My weekly planner for ${startDate} to ${endDate}`;
+    const modal = document.getElementById('shareLinkModal');
+    modal.classList.add('active');
 
-    // Check if Web Share API is supported
-    if (navigator.share) {
-        navigator.share({
-            title: title,
-            text: text,
-            url: window.location.href
-        }).catch((error) => {
-            console.log('Error sharing:', error);
+    // Hide the share link container initially
+    document.getElementById('shareLinkContainer').style.display = 'none';
+}
+
+function closeShareLinkModal() {
+    const modal = document.getElementById('shareLinkModal');
+    modal.classList.remove('active');
+}
+
+async function generateShareLink() {
+    const currentCalendar = calendars.find(c => c.id === currentCalendarId);
+    if (!currentCalendar) return;
+
+    // Get current week's tasks
+    const weekDates = getWeekDates(currentWeekOffset);
+    const weekTasks = {};
+
+    weekDates.forEach(date => {
+        const dateKey = date.toISOString().split('T')[0];
+        if (currentCalendar.tasks[dateKey]) {
+            weekTasks[dateKey] = currentCalendar.tasks[dateKey];
+        }
+    });
+
+    // Prepare data for sharing
+    const shareData = {
+        calendarName: currentCalendar.name,
+        weekOffset: currentWeekOffset,
+        tasks: weekTasks,
+        sharedAt: new Date().toISOString()
+    };
+
+    try {
+        // Call the backend API to create a share link
+        const API_URL = window.location.hostname === 'localhost'
+            ? 'http://localhost:3000'
+            : window.location.origin;
+
+        const response = await fetch(`${API_URL}/api/share`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(shareData)
         });
-    } else {
-        // Fallback: copy URL to clipboard
-        navigator.clipboard.writeText(window.location.href).then(() => {
-            alert('Link copied to clipboard!');
-        }).catch((error) => {
-            console.log('Error copying to clipboard:', error);
-        });
+
+        if (!response.ok) {
+            throw new Error('Failed to create share link');
+        }
+
+        const result = await response.json();
+
+        // Display the share link
+        const shareUrl = `${window.location.origin}${window.location.pathname}?share=${result.shareId}`;
+        const shareLinkInput = document.getElementById('shareLinkInput');
+        shareLinkInput.value = shareUrl;
+        document.getElementById('shareLinkContainer').style.display = 'flex';
+
+    } catch (error) {
+        console.error('Error generating share link:', error);
+        alert('Failed to generate share link. Make sure the server is running.');
     }
+}
+
+function copyShareLink() {
+    const shareLinkInput = document.getElementById('shareLinkInput');
+    shareLinkInput.select();
+    navigator.clipboard.writeText(shareLinkInput.value).then(() => {
+        const btn = document.getElementById('copyShareLinkBtn');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = `
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            Copied!
+        `;
+        setTimeout(() => {
+            btn.innerHTML = originalText;
+        }, 2000);
+    }).catch(error => {
+        console.error('Error copying to clipboard:', error);
+    });
+}
+
+async function loadSharedTaskFromURL() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const shareId = urlParams.get('share');
+
+    if (shareId) {
+        try {
+            const API_URL = window.location.hostname === 'localhost'
+                ? 'http://localhost:3000'
+                : window.location.origin;
+
+            const response = await fetch(`${API_URL}/api/share/${shareId}`);
+
+            if (!response.ok) {
+                throw new Error('Failed to load shared tasks');
+            }
+
+            const data = await response.json();
+
+            // Display shared tasks in a modal
+            displaySharedTasks(data.task);
+
+        } catch (error) {
+            console.error('Error loading shared tasks:', error);
+        }
+    }
+}
+
+function displaySharedTasks(shareData) {
+    const modal = document.getElementById('sharedTaskModal');
+    const body = document.getElementById('sharedTaskBody');
+
+    let html = `<h3 style="margin-bottom: 16px; color: var(--text-primary);">${shareData.calendarName || 'Shared Tasks'}</h3>`;
+
+    Object.keys(shareData.tasks || {}).forEach(dateKey => {
+        const date = new Date(dateKey);
+        const formattedDate = date.toLocaleDateString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+
+        html += `<div style="margin-bottom: 24px;">`;
+        html += `<h4 style="color: var(--text-secondary); font-size: 14px; margin-bottom: 12px;">${formattedDate}</h4>`;
+
+        shareData.tasks[dateKey].forEach(task => {
+            html += `
+                <div class="shared-task-item">
+                    <div class="shared-task-title">${task.text}</div>
+                    ${task.notes ? `<div class="shared-task-notes"><div class="shared-task-notes-title">Notes</div>${task.notes}</div>` : ''}
+                    ${task.tags && task.tags.length > 0 ? `<div style="margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap;">${task.tags.map(tag => `<span style="background: var(--bg-secondary); padding: 4px 8px; border-radius: 12px; font-size: 12px;">${tag}</span>`).join('')}</div>` : ''}
+                </div>
+            `;
+        });
+
+        html += `</div>`;
+    });
+
+    body.innerHTML = html;
+    modal.classList.add('active');
 }
 
 // Calendar sync functions - Seamless integration
@@ -3621,7 +3745,7 @@ function generateICSContent() {
             // Create unique ID for event
             const uid = `task-${task.id}@weeklyplanner`;
 
-            // Format description with notes and subtasks
+            // Format description with notes, subtasks, and links
             let description = task.text || '';
             if (task.notes) {
                 description += '\\n\\nNotes: ' + task.notes.replace(/\n/g, '\\n');
@@ -3632,6 +3756,23 @@ function generateICSContent() {
                     description += `\\n- [${st.completed ? 'X' : ' '}] ${st.text}`;
                 });
             }
+            if (task.links && task.links.length > 0) {
+                description += '\\n\\nLinks:';
+                task.links.forEach(link => {
+                    description += `\\n- ${link.title || 'Link'}: ${link.url}`;
+                });
+            }
+
+            // Combine color and tags for CATEGORIES field
+            let categories = [];
+            if (task.color) {
+                categories.push(task.color);
+            }
+            if (task.tags && task.tags.length > 0) {
+                // Extract tag names (remove # prefix if present)
+                const tagNames = task.tags.map(tag => tag.replace(/^#/, ''));
+                categories = categories.concat(tagNames);
+            }
 
             icsContent.push(
                 'BEGIN:VEVENT',
@@ -3641,7 +3782,7 @@ function generateICSContent() {
                 `SUMMARY:${(task.text || 'Untitled Task').replace(/\n/g, ' ')}`,
                 `DESCRIPTION:${description}`,
                 `STATUS:${task.completed ? 'COMPLETED' : 'NEEDS-ACTION'}`,
-                task.color ? `CATEGORIES:${task.color}` : '',
+                categories.length > 0 ? `CATEGORIES:${categories.join(',')}` : '',
                 'END:VEVENT'
             );
         });
@@ -3766,6 +3907,163 @@ function openSupportModal() {
 function closeSupportModal() {
     const modal = document.getElementById('supportModal');
     modal.classList.remove('active');
+}
+
+// Analytics Dashboard Functions
+function openAnalyticsModal() {
+    closeMenu();
+    const modal = document.getElementById('analyticsModal');
+    modal.classList.add('active');
+    calculateWeeklyAnalytics();
+}
+
+function closeAnalyticsModal() {
+    const modal = document.getElementById('analyticsModal');
+    modal.classList.remove('active');
+}
+
+function calculateWeeklyAnalytics() {
+    const currentCalendar = calendars.find(c => c.id === currentCalendarId);
+    if (!currentCalendar) return;
+
+    // Get current week date range
+    const today = new Date();
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay() + currentWeekOffset * 7);
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+
+    // Display date range
+    const dateRangeEl = document.getElementById('analyticsDateRange');
+    const options = { month: 'short', day: 'numeric', year: 'numeric' };
+    dateRangeEl.textContent = `${startOfWeek.toLocaleDateString('en-US', options)} - ${endOfWeek.toLocaleDateString('en-US', options)}`;
+
+    // Collect all tasks for the week
+    let totalTasks = 0;
+    let completedTasks = 0;
+    let totalMinutes = 0;
+    const tagCounts = {};
+    const dailyData = {};
+
+    // Initialize daily data
+    const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    for (let i = 0; i < 7; i++) {
+        const date = new Date(startOfWeek);
+        date.setDate(startOfWeek.getDate() + i);
+        const dateKey = date.toISOString().split('T')[0];
+        dailyData[dateKey] = {
+            label: daysOfWeek[i],
+            tasks: 0,
+            completed: 0,
+            minutes: 0
+        };
+    }
+
+    // Process tasks
+    Object.keys(currentCalendar.tasks || {}).forEach(dateKey => {
+        if (dailyData[dateKey]) {
+            const tasksForDate = currentCalendar.tasks[dateKey] || [];
+            tasksForDate.forEach(task => {
+                totalTasks++;
+                dailyData[dateKey].tasks++;
+
+                if (task.completed) {
+                    completedTasks++;
+                    dailyData[dateKey].completed++;
+                }
+
+                // Calculate time from time blocks
+                if (task.timeBlock && task.timeBlock.start && task.timeBlock.end) {
+                    const [startHour, startMin] = task.timeBlock.start.split(':').map(Number);
+                    const [endHour, endMin] = task.timeBlock.end.split(':').map(Number);
+                    const minutes = (endHour * 60 + endMin) - (startHour * 60 + startMin);
+                    if (minutes > 0) {
+                        totalMinutes += minutes;
+                        dailyData[dateKey].minutes += minutes;
+                    }
+                }
+
+                // Count tags
+                if (task.tags && task.tags.length > 0) {
+                    task.tags.forEach(tag => {
+                        const cleanTag = tag.replace(/^#/, '');
+                        tagCounts[cleanTag] = (tagCounts[cleanTag] || 0) + 1;
+                    });
+                }
+            });
+        }
+    });
+
+    // Update total hours
+    const hours = Math.floor(totalMinutes / 60);
+    const mins = totalMinutes % 60;
+    const totalHoursEl = document.getElementById('totalHours');
+    if (hours > 0 && mins > 0) {
+        totalHoursEl.textContent = `${hours}h ${mins}m`;
+    } else if (hours > 0) {
+        totalHoursEl.textContent = `${hours}h`;
+    } else if (mins > 0) {
+        totalHoursEl.textContent = `${mins}m`;
+    } else {
+        totalHoursEl.textContent = '0h';
+    }
+
+    // Update completion rate
+    const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+    document.getElementById('completionRate').textContent = `${completionRate}%`;
+
+    // Update total tasks
+    document.getElementById('totalTasks').textContent = totalTasks;
+
+    // Update top tags
+    const topTagsEl = document.getElementById('analyticsTopTags');
+    const sortedTags = Object.entries(tagCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10);
+
+    if (sortedTags.length > 0) {
+        topTagsEl.innerHTML = '';
+        sortedTags.forEach(([tag, count]) => {
+            const tagItem = document.createElement('div');
+            tagItem.className = 'analytics-tag-item';
+            tagItem.innerHTML = `
+                <span class="analytics-tag-name">#${tag}</span>
+                <span class="analytics-tag-count">${count}</span>
+            `;
+            topTagsEl.appendChild(tagItem);
+        });
+    } else {
+        topTagsEl.innerHTML = '<div class="analytics-empty">No tags found for this week</div>';
+    }
+
+    // Update daily breakdown chart
+    const chartEl = document.getElementById('analyticsChart');
+    chartEl.innerHTML = '';
+
+    const maxTasks = Math.max(...Object.values(dailyData).map(d => d.tasks), 1);
+
+    Object.entries(dailyData).forEach(([dateKey, data]) => {
+        const percentage = (data.tasks / maxTasks) * 100;
+
+        const rowEl = document.createElement('div');
+        rowEl.className = 'analytics-chart-row';
+
+        const completionText = data.completed > 0 ? ` (${data.completed} done)` : '';
+        const timeText = data.minutes > 0 ? ` • ${Math.floor(data.minutes / 60)}h ${data.minutes % 60}m` : '';
+
+        rowEl.innerHTML = `
+            <div class="analytics-chart-label">${data.label}</div>
+            <div class="analytics-chart-bar-container">
+                <div class="analytics-chart-bar" style="width: ${percentage}%">
+                    ${percentage > 15 ? `<span class="analytics-chart-value">${data.tasks}</span>` : ''}
+                </div>
+            </div>
+            <div class="analytics-chart-label" style="min-width: 150px; text-align: left;">
+                ${data.tasks} tasks${completionText}${timeText}
+            </div>
+        `;
+        chartEl.appendChild(rowEl);
+    });
 }
 
 // Display attached files
@@ -3903,6 +4201,16 @@ function setupEventListeners() {
         }
     });
 
+    // Share link modal
+    document.getElementById('closeShareLinkBtn').addEventListener('click', closeShareLinkModal);
+    document.getElementById('shareLinkModal').addEventListener('click', (e) => {
+        if (e.target.id === 'shareLinkModal') {
+            closeShareLinkModal();
+        }
+    });
+    document.getElementById('generateShareLinkBtn').addEventListener('click', generateShareLink);
+    document.getElementById('copyShareLinkBtn').addEventListener('click', copyShareLink);
+
     // Three-dots menu in popover
     document.getElementById('taskPopoverMenuBtn').addEventListener('click', (e) => {
         e.stopPropagation();
@@ -3958,6 +4266,15 @@ function setupEventListeners() {
     document.getElementById('printBtn').addEventListener('click', handlePrint);
     document.getElementById('shareBtn').addEventListener('click', handleShare);
     document.getElementById('supportBtn').addEventListener('click', openSupportModal);
+
+    // Analytics modal
+    document.getElementById('analyticsBtn').addEventListener('click', openAnalyticsModal);
+    document.getElementById('closeAnalyticsBtn').addEventListener('click', closeAnalyticsModal);
+    document.getElementById('analyticsModal').addEventListener('click', (e) => {
+        if (e.target.id === 'analyticsModal') {
+            closeAnalyticsModal();
+        }
+    });
 
     // Calendar sync modal
     document.getElementById('addToCalendarBtn').addEventListener('click', openCalendarSyncModal);

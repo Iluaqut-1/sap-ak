@@ -2939,13 +2939,615 @@ body {
     flex-wrap: wrap;
 }
 
+/* Workload Heatmap */
+.workload-heatmap {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding: 12px;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+}
+
+.heatmap-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+}
+
+.heatmap-days {
+    display: flex;
+    gap: 4px;
+    flex: 1;
+}
+
+.heatmap-day {
+    flex: 1;
+    height: 40px;
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    color: var(--text-primary);
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.heatmap-day:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.heatmap-day-name {
+    font-weight: 600;
+}
+
+.heatmap-day-count {
+    font-size: 10px;
+    color: var(--text-tertiary);
+}
+
+/* Intensity levels */
+.heatmap-day.intensity-0 { background: #f3f4f6; }
+.heatmap-day.intensity-1 { background: #dbeafe; }
+.heatmap-day.intensity-2 { background: #93c5fd; }
+.heatmap-day.intensity-3 { background: #60a5fa; }
+.heatmap-day.intensity-4 { background: #3b82f6; color: white; }
+.heatmap-day.intensity-5 { background: #2563eb; color: white; }
+
+/* Tag Filter */
+.tag-filter-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding: 12px;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+}
+
+.tag-filter-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+}
+
+.tag-filter-select {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid var(--border-dark);
+    border-radius: 6px;
+    font-size: 14px;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.tag-filter-select:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+/* Tags in Task Popover */
+.task-tags-section {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.tags-display {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+    min-height: 24px;
+}
+
+.tag-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: #dbeafe;
+    color: #1e40af;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.tag-chip-remove {
+    cursor: pointer;
+    font-weight: bold;
+    margin-left: 2px;
+}
+
+.tag-chip-remove:hover {
+    color: #dc2626;
+}
+
+.tags-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    font-size: 13px;
+}
+
+.tags-input:focus {
+    outline: none;
+    border-color: #818cf8;
+}
+
+/* Links in Task Popover */
+.task-links-section {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.links-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
+    min-height: 24px;
+}
+
+.link-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    background: #f9fafb;
+    border-radius: 6px;
+    border: 1px solid #e5e7eb;
+}
+
+.link-item svg {
+    width: 14px;
+    height: 14px;
+    color: #6b7280;
+    flex-shrink: 0;
+}
+
+.link-item a {
+    flex: 1;
+    font-size: 13px;
+    color: #3b82f6;
+    text-decoration: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.link-item a:hover {
+    text-decoration: underline;
+}
+
+.link-delete {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #9ca3af;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.link-delete:hover {
+    color: #dc2626;
+}
+
+.add-link-form {
+    display: flex;
+    gap: 6px;
+}
+
+.link-url-input,
+.link-title-input {
+    padding: 8px 10px;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    font-size: 13px;
+}
+
+.link-url-input {
+    flex: 2;
+}
+
+.link-title-input {
+    flex: 1;
+}
+
+.add-link-btn {
+    padding: 8px 16px;
+    background: #818cf8;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.add-link-btn:hover {
+    background: #6366f1;
+}
+
+/* Time Block Section */
+.task-timeblock-section {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.timeblock-inputs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.time-input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 14px;
+    background-color: white;
+    cursor: pointer;
+}
+
+.time-input:focus {
+    outline: none;
+    border-color: #818cf8;
+    box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.1);
+}
+
+.time-separator {
+    font-size: 14px;
+    color: #9ca3af;
+}
+
+/* Time Block Week View */
+.week-container.time-block-mode {
+    display: flex;
+    gap: 1px;
+    background: #e5e7eb;
+}
+
+.day-column.time-block-mode {
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    min-height: auto;
+}
+
+.time-grid {
+    display: grid;
+    grid-template-rows: repeat(24, 60px);
+    position: relative;
+    border-left: 1px solid #e5e7eb;
+    margin-top: 12px;
+    flex: 1;
+}
+
+.time-label {
+    position: absolute;
+    left: -50px;
+    font-size: 11px;
+    color: #9ca3af;
+    font-weight: 500;
+}
+
+.time-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: #e5e7eb;
+}
+
+.time-block-task {
+    position: absolute;
+    left: 4px;
+    right: 4px;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 12px;
+    overflow: hidden;
+    cursor: pointer;
+    border-left: 3px solid rgba(0,0,0,0.2);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.time-block-time {
+    font-size: 10px;
+    font-weight: 600;
+    opacity: 0.8;
+}
+
+.time-block-text {
+    font-size: 12px;
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Payroll View */
+.payroll-view {
+    margin-bottom: 40px;
+}
+
+.payroll-container {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 1px;
+    background: #e5e7eb;
+    border: 1px solid #e5e7eb;
+    margin-bottom: 20px;
+}
+
+.payroll-container.week-2 {
+    margin-top: 12px;
+}
+
+.payroll-day {
+    background: #fff;
+    min-height: 100px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+}
+
+.payroll-day-header {
+    font-size: 11px;
+    font-weight: 600;
+    color: #6b7280;
+    margin-bottom: 6px;
+}
+
+.payroll-hours-input {
+    width: 100%;
+    padding: 6px;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    font-size: 13px;
+    text-align: center;
+    margin-bottom: 6px;
+}
+
+.payroll-hours-input:focus {
+    outline: none;
+    border-color: #818cf8;
+}
+
+.payroll-notes {
+    flex: 1;
+}
+
+.payroll-notes-input {
+    width: 100%;
+    height: 100%;
+    min-height: 40px;
+    padding: 6px;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+    font-size: 11px;
+    resize: none;
+    font-family: inherit;
+}
+
+.payroll-notes-input:focus {
+    outline: none;
+    border-color: #818cf8;
+}
+
+/* Overdue Modal */
+.overdue-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+}
+
+.overdue-modal.active {
+    display: flex;
+}
+
+.overdue-content {
+    background: #fff;
+    border-radius: 12px;
+    max-width: 500px;
+    width: 90%;
+    max-height: 70vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+}
+
+.overdue-header {
+    padding: 20px;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.overdue-header h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.overdue-body {
+    padding: 20px;
+}
+
+.overdue-task-item {
+    padding: 12px;
+    background: #fef3c7;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.overdue-task-text {
+    flex: 1;
+    font-size: 14px;
+    color: #1f2937;
+}
+
+.overdue-task-date {
+    font-size: 12px;
+    color: #9ca3af;
+    margin-top: 4px;
+}
+
+.push-tomorrow-btn {
+    padding: 6px 12px;
+    background: #818cf8;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.push-tomorrow-btn:hover {
+    background: #6366f1;
+}
+
+.overdue-footer {
+    padding: 16px 20px;
+    border-top: 1px solid #e5e7eb;
+    text-align: center;
+}
+
+.overdue-dismiss-btn {
+    padding: 8px 16px;
+    background: #f3f4f6;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #6b7280;
+}
+
+.overdue-dismiss-btn:hover {
+    background: #e5e7eb;
+}
+
+/* Focus Mode */
+body.focus-mode .header-actions > *:not(#focusModeBtn):not(#darkModeToggle):not(#prevBtn):not(#nextBtn) {
+    display: none;
+}
+
+body.focus-mode .header-left .calendar-selector {
+    display: none;
+}
+
+body.focus-mode .week-container {
+    grid-template-columns: 1fr;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+body.focus-mode .day-column:not(.today):not(.tomorrow) {
+    display: none;
+}
+
+body.focus-mode .someday-section {
+    display: none;
+}
+
+body.focus-mode .workload-heatmap,
+body.focus-mode .tag-filter-container {
+    display: none !important;
+}
+
+body.focus-mode {
+    background: var(--bg-secondary);
+}
+
+/* Timezone Selector */
+.timezone-selector {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 12px 16px;
+}
+
+.timezone-selector:hover {
+    background-color: transparent;
+}
+
+.timezone-select {
+    flex: 1;
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 14px;
+    background-color: #fff;
+    cursor: pointer;
+    font-family: inherit;
+    margin-top: 8px;
+}
+
+.timezone-select:focus {
+    outline: none;
+    border-color: #a78bfa;
+}
+
+.timezone-secondary {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 12px 16px;
+}
+
+.timezone-secondary:hover {
+    background-color: transparent;
+}
+
+.timezone-secondary-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #4b5563;
+    cursor: pointer;
+}
+
+.timezone-checkbox {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: #818cf8;
+}
+
 /* Print styles */
 @media print {
     .header-actions,
     .add-task-area,
     .task-actions,
     .clone-icon,
-    .task-popover {
+    .task-popover,
+    .workload-heatmap,
+    .tag-filter-container {
         display: none !important;
     }
 
@@ -2956,5 +3558,53 @@ body {
 
     .day-column {
         border: 1px solid #000;
+    }
+
+    /* Week calendar - landscape */
+    @page {
+        size: landscape;
+        margin: 0.5cm;
+    }
+
+    .week-container {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        page-break-inside: avoid;
+    }
+
+    .day-header {
+        border-bottom: 2px solid #000;
+    }
+
+    .day-name {
+        font-size: 10px;
+        font-weight: bold;
+        text-transform: uppercase;
+    }
+
+    .day-date {
+        font-size: 14px;
+        font-weight: bold;
+    }
+
+    .task-item {
+        font-size: 10px;
+        padding: 6px 8px;
+        margin-bottom: 4px;
+        page-break-inside: avoid;
+    }
+
+    /* Payroll - portrait */
+    body.print-payroll @page {
+        size: portrait;
+    }
+
+    body.print-payroll .payroll-container {
+        page-break-inside: avoid;
+    }
+
+    body.print-payroll .payroll-day {
+        border: 1px solid #000;
+        font-size: 10px;
     }
 }

@@ -72,7 +72,29 @@
                             <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"></path>
                         </svg>
                     </button>
+                    <button class="view-btn" data-view="payroll" aria-label="14-day payroll view" title="14-day payroll">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <text x="6" y="16" font-size="12" fill="currentColor">14</text>
+                        </svg>
+                    </button>
                 </div>
+                <button class="icon-btn" id="timeBlockModeBtn" aria-label="Time block mode" title="Toggle time blocks">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                </button>
+                <button class="icon-btn" id="focusModeBtn" aria-label="Focus mode" title="Focus mode">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                </button>
+                <button class="icon-btn" id="darkModeToggle" aria-label="Dark mode" title="Toggle dark mode">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                </button>
                 <button class="icon-btn" id="searchBtn" aria-label="Search">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="11" cy="11" r="8"></circle>
@@ -190,6 +212,35 @@
                 </svg>
                 <span>Manage Palettes</span>
             </button>
+            <div class="menu-divider"></div>
+            <div class="menu-section-title">Time Zone</div>
+            <div class="menu-item timezone-selector">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+                <select id="primaryTimezone" class="timezone-select">
+                    <option value="America/Godthab">Greenland (Nuuk)</option>
+                    <option value="America/Scoresbysund">Greenland (Ittoqqortoormiit)</option>
+                    <option value="America/Thule">Greenland (Qaanaaq)</option>
+                    <option value="Europe/Copenhagen">Denmark</option>
+                    <option value="Europe/Paris">France</option>
+                    <option value="UTC">UTC</option>
+                </select>
+            </div>
+            <div class="menu-item timezone-secondary">
+                <label class="timezone-secondary-label">
+                    <input type="checkbox" id="showSecondaryTimezone" class="timezone-checkbox">
+                    <span>Show secondary timezone</span>
+                </label>
+                <select id="secondaryTimezone" class="timezone-select" disabled style="margin-top: 8px;">
+                    <option value="America/Godthab">Greenland (Nuuk)</option>
+                    <option value="Europe/Copenhagen">Denmark</option>
+                    <option value="Europe/Paris">France</option>
+                    <option value="America/New_York">New York</option>
+                    <option value="UTC">UTC</option>
+                </select>
+            </div>
             <div class="menu-divider"></div>
             <div class="menu-item language-selector">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -383,6 +434,20 @@
             </div>
         </div>
 
+        <!-- Workload Heatmap -->
+        <div class="workload-heatmap" id="workloadHeatmap" style="display: none;">
+            <div class="heatmap-label">Workload:</div>
+            <div class="heatmap-days" id="heatmapDays"></div>
+        </div>
+
+        <!-- Tag Filter -->
+        <div class="tag-filter-container" id="tagFilterContainer" style="display: none;">
+            <label class="tag-filter-label">Filter by tag:</label>
+            <select id="tagFilter" class="tag-filter-select">
+                <option value="">All tasks</option>
+            </select>
+        </div>
+
         <!-- Month view -->
         <div class="month-container" id="monthContainer" style="display: none;">
             <!-- Month calendar will be generated by JavaScript -->
@@ -391,6 +456,11 @@
         <!-- Week view -->
         <div class="week-container" id="weekContainer">
             <!-- Days will be generated by JavaScript -->
+        </div>
+
+        <!-- Payroll view -->
+        <div class="payroll-view" id="payrollView" style="display: none;">
+            <!-- 14-day payroll will be generated by JavaScript -->
         </div>
 
         <!-- Day view -->
@@ -601,6 +671,55 @@
             <!-- Attached files display -->
             <div class="attached-files" id="attachedFiles"></div>
 
+            <!-- Tags section -->
+            <div class="task-tags-section">
+                <label class="task-section-label">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+                        <line x1="7" y1="7" x2="7.01" y2="7"></line>
+                    </svg>
+                    Tags
+                </label>
+                <div class="tags-display" id="tagsDisplay"></div>
+                <input type="text"
+                       class="tags-input"
+                       id="tagsInput"
+                       placeholder="Add tags (e.g., #work #urgent)">
+            </div>
+
+            <!-- Links section -->
+            <div class="task-links-section">
+                <label class="task-section-label">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                    </svg>
+                    Links
+                </label>
+                <div class="links-list" id="linksList"></div>
+                <div class="add-link-form">
+                    <input type="url" id="linkUrlInput" placeholder="https://..." class="link-url-input">
+                    <input type="text" id="linkTitleInput" placeholder="Link title (optional)" class="link-title-input">
+                    <button class="add-link-btn" id="addLinkBtn" type="button">Add</button>
+                </div>
+            </div>
+
+            <!-- Time block section -->
+            <div class="task-timeblock-section" id="timeBlockSection" style="display: none;">
+                <label class="task-section-label">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                    Time Block
+                </label>
+                <div class="timeblock-inputs">
+                    <input type="time" id="startTimeInput" class="time-input" placeholder="Start">
+                    <span class="time-separator">→</span>
+                    <input type="time" id="endTimeInput" class="time-input" placeholder="End">
+                </div>
+            </div>
+
             <!-- Recurrence section -->
             <div class="task-recurrence-section">
                 <label class="task-section-label">
@@ -743,6 +862,27 @@
             </div>
             <div class="shared-task-body" id="sharedTaskBody">
                 <!-- Task details will be rendered here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Overdue Tasks Modal -->
+    <div class="overdue-modal" id="overdueModal">
+        <div class="overdue-content">
+            <div class="overdue-header">
+                <h2>Overdue Tasks</h2>
+                <button class="close-btn" id="closeOverdueBtn" aria-label="Close">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="overdue-body" id="overdueBody">
+                <!-- Will be populated by JS -->
+            </div>
+            <div class="overdue-footer">
+                <button class="overdue-dismiss-btn" id="dismissOverdueBtn">Dismiss for today</button>
             </div>
         </div>
     </div>

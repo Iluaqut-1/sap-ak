@@ -44,6 +44,12 @@
                         </svg>
                     </button>
                 </div>
+                <button class="icon-btn" id="searchBtn" aria-label="Search">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                </button>
                 <button class="icon-btn" id="userBtn" aria-label="User">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
@@ -160,6 +166,50 @@
         <div class="someday-section" id="somedaySection">
             <div class="someday-header">Someday</div>
             <div class="day-tasks" id="somedayTasks" data-day="someday"></div>
+        </div>
+    </div>
+
+    <!-- Search Modal -->
+    <div class="search-modal" id="searchModal">
+        <div class="search-modal-content">
+            <div class="search-header">
+                <div class="search-input-wrapper">
+                    <svg class="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="m21 21-4.35-4.35"></path>
+                    </svg>
+                    <input type="text" class="search-input" id="searchInput" placeholder="Search tasks..." autofocus>
+                    <button class="search-clear-btn" id="searchClearBtn" style="display: none;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                <button class="search-close-btn" id="searchCloseBtn">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="search-filters">
+                <div class="search-filter-label">Filter by color:</div>
+                <div class="search-color-filters">
+                    <button class="search-color-filter active" data-color="all">All</button>
+                    <button class="search-color-filter" data-color="default" style="background-color: #fef3c7"></button>
+                    <button class="search-color-filter" data-color="green" style="background-color: #6ee7b7"></button>
+                    <button class="search-color-filter" data-color="blue" style="background-color: #93c5fd"></button>
+                    <button class="search-color-filter" data-color="purple" style="background-color: #c4b5fd"></button>
+                    <button class="search-color-filter" data-color="pink" style="background-color: #f9a8d4"></button>
+                    <button class="search-color-filter" data-color="red" style="background-color: #fca5a5"></button>
+                    <button class="search-color-filter" data-color="orange" style="background-color: #fdba74"></button>
+                    <button class="search-color-filter" data-color="gray" style="background-color: #d1d5db"></button>
+                </div>
+            </div>
+            <div class="search-results" id="searchResults">
+                <div class="search-empty">Start typing to search tasks...</div>
+            </div>
         </div>
     </div>
 

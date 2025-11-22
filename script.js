@@ -1595,6 +1595,162 @@ function navigateWeek(direction) {
     renderWeek();
 }
 
+// Search functionality
+let searchState = {
+    query: '',
+    colorFilter: 'all'
+};
+
+function openSearch() {
+    const modal = document.getElementById('searchModal');
+    const input = document.getElementById('searchInput');
+    modal.classList.add('active');
+    input.focus();
+    performSearch();
+}
+
+function closeSearch() {
+    const modal = document.getElementById('searchModal');
+    const input = document.getElementById('searchInput');
+    modal.classList.remove('active');
+    input.value = '';
+    searchState.query = '';
+    searchState.colorFilter = 'all';
+    document.getElementById('searchClearBtn').style.display = 'none';
+
+    // Reset color filter
+    document.querySelectorAll('.search-color-filter').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.color === 'all') {
+            btn.classList.add('active');
+        }
+    });
+}
+
+function performSearch() {
+    const query = searchState.query.toLowerCase();
+    const colorFilter = searchState.colorFilter;
+    const resultsContainer = document.getElementById('searchResults');
+
+    // Clear previous results
+    resultsContainer.innerHTML = '';
+
+    // If no query, show empty state
+    if (query.trim() === '') {
+        const empty = document.createElement('div');
+        empty.className = 'search-empty';
+        empty.textContent = 'Start typing to search tasks...';
+        resultsContainer.appendChild(empty);
+        return;
+    }
+
+    // Search through all tasks
+    const results = [];
+
+    for (const dateKey in tasks) {
+        tasks[dateKey].forEach(task => {
+            // Filter by color if not 'all'
+            if (colorFilter !== 'all' && task.color !== colorFilter) {
+                return;
+            }
+
+            // Search in task text
+            const textContent = task.text.replace(/<[^>]*>/g, '').toLowerCase();
+            if (textContent.includes(query)) {
+                results.push({
+                    task,
+                    dateKey,
+                    textContent
+                });
+            }
+        });
+    }
+
+    // Display results
+    if (results.length === 0) {
+        const noResults = document.createElement('div');
+        noResults.className = 'search-no-results';
+        noResults.textContent = `No tasks found for "${searchState.query}"`;
+        resultsContainer.appendChild(noResults);
+        return;
+    }
+
+    results.forEach(({ task, dateKey, textContent }) => {
+        const resultItem = document.createElement('div');
+        resultItem.className = `search-result-item ${task.color || 'default'}`;
+
+        // Highlight matching text
+        const highlightedText = highlightMatches(task.text, query);
+
+        const textDiv = document.createElement('div');
+        textDiv.className = 'search-result-text';
+        textDiv.innerHTML = highlightedText;
+
+        const dateDiv = document.createElement('div');
+        dateDiv.className = 'search-result-date';
+
+        if (dateKey === 'someday') {
+            dateDiv.textContent = 'Someday';
+        } else {
+            const date = new Date(dateKey + 'T00:00:00');
+            dateDiv.textContent = `${formatDayName(date)}, ${formatMonthYear(date)} ${date.getDate()}`;
+        }
+
+        resultItem.appendChild(textDiv);
+        resultItem.appendChild(dateDiv);
+
+        // Click to open task
+        resultItem.addEventListener('click', () => {
+            closeSearch();
+            // Switch to appropriate view and open task
+            if (dateKey === 'someday') {
+                switchView('week');
+            } else {
+                currentDayDate = dateKey;
+                switchView('day');
+            }
+            // Wait for view to render, then open task popover
+            setTimeout(() => {
+                const taskEl = document.querySelector(`[data-task-id="${task.id}"]`);
+                if (taskEl) {
+                    openTaskPopover(task.id, dateKey, taskEl);
+                }
+            }, 100);
+        });
+
+        resultsContainer.appendChild(resultItem);
+    });
+}
+
+function highlightMatches(text, query) {
+    // Remove HTML tags for matching
+    const textWithoutTags = text.replace(/<[^>]*>/g, '');
+
+    // Find matches and highlight them
+    const regex = new RegExp(`(${escapeRegExp(query)})`, 'gi');
+    const highlighted = textWithoutTags.replace(regex, '<mark>$1</mark>');
+
+    return highlighted;
+}
+
+function escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function setSearchColorFilter(color) {
+    searchState.colorFilter = color;
+
+    // Update active state
+    document.querySelectorAll('.search-color-filter').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.color === color) {
+            btn.classList.add('active');
+        }
+    });
+
+    performSearch();
+}
+
 // Local storage
 function saveTasksToStorage() {
     localStorage.setItem('weeklyPlannerTasks', JSON.stringify(tasks));
@@ -1854,6 +2010,36 @@ function setupEventListeners() {
         }
     });
 
+    // Search
+    document.getElementById('searchBtn').addEventListener('click', openSearch);
+    document.getElementById('searchCloseBtn').addEventListener('click', closeSearch);
+    document.getElementById('searchModal').addEventListener('click', (e) => {
+        if (e.target.id === 'searchModal') {
+            closeSearch();
+        }
+    });
+
+    document.getElementById('searchInput').addEventListener('input', (e) => {
+        searchState.query = e.target.value;
+        const clearBtn = document.getElementById('searchClearBtn');
+        clearBtn.style.display = e.target.value ? 'block' : 'none';
+        performSearch();
+    });
+
+    document.getElementById('searchClearBtn').addEventListener('click', () => {
+        document.getElementById('searchInput').value = '';
+        document.getElementById('searchClearBtn').style.display = 'none';
+        searchState.query = '';
+        performSearch();
+    });
+
+    document.querySelectorAll('.search-color-filter').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const color = btn.dataset.color;
+            setSearchColorFilter(color);
+        });
+    });
+
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
@@ -1861,6 +2047,7 @@ function setupEventListeners() {
             closeSupportModal();
             closeMenu();
             closeTaskPopover();
+            closeSearch();
         }
     });
 }

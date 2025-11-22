@@ -365,6 +365,33 @@ function createTaskElement(task, dateKey) {
     taskText.innerHTML = formatTaskText(task.text);
     taskEl.appendChild(taskText);
 
+    // Task indicators (subtasks, notes)
+    const indicators = document.createElement('div');
+    indicators.className = 'task-indicators';
+
+    // Subtasks indicator
+    if (task.subtasks && task.subtasks.length > 0) {
+        const completed = task.subtasks.filter(st => st.completed).length;
+        const total = task.subtasks.length;
+        const subtaskIndicator = document.createElement('span');
+        subtaskIndicator.className = 'task-indicator subtask-indicator';
+        subtaskIndicator.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg> ${completed}/${total}`;
+        indicators.appendChild(subtaskIndicator);
+    }
+
+    // Notes indicator
+    if (task.notes && task.notes.trim()) {
+        const notesIndicator = document.createElement('span');
+        notesIndicator.className = 'task-indicator notes-indicator';
+        notesIndicator.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>';
+        notesIndicator.title = 'Has notes';
+        indicators.appendChild(notesIndicator);
+    }
+
+    if (indicators.children.length > 0) {
+        taskEl.appendChild(indicators);
+    }
+
     // Clone icon
     const cloneIcon = document.createElement('span');
     cloneIcon.className = 'clone-icon';
@@ -509,7 +536,9 @@ function createNewTask(dateKey, container) {
                 id: Date.now().toString(),
                 text: text,
                 color: '',
-                completed: false
+                completed: false,
+                notes: '',
+                subtasks: []
             };
 
             if (!tasks[dateKey]) {
@@ -556,6 +585,13 @@ function openTaskPopover(taskId, dateKey, taskElement) {
 
     // Set textarea value
     textarea.value = task.text;
+
+    // Load notes
+    const notesTextarea = document.getElementById('taskNotesTextarea');
+    notesTextarea.value = task.notes || '';
+
+    // Load subtasks
+    renderSubtasks(task);
 
     // Set current color selection
     document.querySelectorAll('.color-option-small').forEach(btn => {
@@ -617,8 +653,10 @@ function closeTaskPopover() {
         const task = tasks[taskPopoverState.dateKey]?.find(t => t.id === taskPopoverState.taskId);
         if (task) {
             const newText = textarea.value.trim();
+            const notesTextarea = document.getElementById('taskNotesTextarea');
             if (newText) {
                 task.text = newText;
+                task.notes = notesTextarea.value.trim();
                 saveTasksToStorage();
                 renderWeek();
             }
@@ -630,6 +668,118 @@ function closeTaskPopover() {
     backdrop.classList.remove('active');
     moveDropdown.classList.remove('active');
     taskPopoverState = { taskId: null, dateKey: null, taskElement: null };
+}
+
+// Subtasks management
+function renderSubtasks(task) {
+    const subtasksList = document.getElementById('subtasksList');
+    const progressEl = document.getElementById('subtasksProgress');
+
+    subtasksList.innerHTML = '';
+
+    if (!task.subtasks) {
+        task.subtasks = [];
+    }
+
+    // Update progress
+    const completed = task.subtasks.filter(st => st.completed).length;
+    const total = task.subtasks.length;
+
+    if (total > 0) {
+        progressEl.textContent = `${completed}/${total}`;
+    } else {
+        progressEl.textContent = '';
+    }
+
+    // Render each subtask
+    task.subtasks.forEach((subtask, index) => {
+        const item = document.createElement('div');
+        item.className = 'subtask-item';
+        if (subtask.completed) {
+            item.classList.add('completed');
+        }
+
+        // Checkbox
+        const checkbox = document.createElement('div');
+        checkbox.className = 'subtask-checkbox';
+        if (subtask.completed) {
+            checkbox.classList.add('checked');
+        }
+        checkbox.onclick = () => toggleSubtask(index);
+        item.appendChild(checkbox);
+
+        // Text input
+        const textInput = document.createElement('input');
+        textInput.type = 'text';
+        textInput.className = 'subtask-text';
+        textInput.value = subtask.text;
+        textInput.placeholder = 'Subtask...';
+        textInput.oninput = (e) => {
+            subtask.text = e.target.value;
+            saveTasksToStorage();
+        };
+        textInput.onkeydown = (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addSubtask();
+            }
+        };
+        item.appendChild(textInput);
+
+        // Delete button
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'subtask-delete';
+        deleteBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+        deleteBtn.onclick = () => deleteSubtask(index);
+        item.appendChild(deleteBtn);
+
+        subtasksList.appendChild(item);
+    });
+}
+
+function addSubtask() {
+    const { taskId, dateKey } = taskPopoverState;
+    const task = tasks[dateKey]?.find(t => t.id === taskId);
+    if (!task) return;
+
+    if (!task.subtasks) {
+        task.subtasks = [];
+    }
+
+    task.subtasks.push({
+        id: Date.now().toString(),
+        text: '',
+        completed: false
+    });
+
+    renderSubtasks(task);
+    saveTasksToStorage();
+
+    // Focus the new subtask input
+    const inputs = document.querySelectorAll('.subtask-text');
+    if (inputs.length > 0) {
+        inputs[inputs.length - 1].focus();
+    }
+}
+
+function toggleSubtask(index) {
+    const { taskId, dateKey } = taskPopoverState;
+    const task = tasks[dateKey]?.find(t => t.id === taskId);
+    if (!task || !task.subtasks[index]) return;
+
+    task.subtasks[index].completed = !task.subtasks[index].completed;
+    renderSubtasks(task);
+    saveTasksToStorage();
+}
+
+function deleteSubtask(index) {
+    const { taskId, dateKey } = taskPopoverState;
+    const task = tasks[dateKey]?.find(t => t.id === taskId);
+    if (!task) return;
+
+    task.subtasks.splice(index, 1);
+    renderSubtasks(task);
+    saveTasksToStorage();
 }
 
 // Apply text formatting in popover
@@ -1971,6 +2121,9 @@ function setupEventListeners() {
 
     // File input
     document.getElementById('fileInput').addEventListener('change', handleFileInput);
+
+    // Add subtask button
+    document.getElementById('addSubtaskBtn').addEventListener('click', addSubtask);
 
     // Menu
     document.getElementById('menuBtn').addEventListener('click', (e) => {

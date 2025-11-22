@@ -351,6 +351,14 @@ document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
     switchView(currentView); // Start with saved view
     loadSharedTaskFromURL(); // Check if there's a shared task in URL
+
+    // Check reminders every minute
+    checkReminders();
+    setInterval(checkReminders, 60000); // Check every minute
+
+    // Request notification permission (only if user hasn't decided yet)
+    // This is non-intrusive - won't show popup unless user interacts
+    setTimeout(requestNotificationPermission, 3000); // Wait 3s before asking
 });
 
 // Get date utilities
@@ -474,11 +482,21 @@ function renderWeek() {
     renderSomedayTasks();
 }
 
+// Check if date is in the past (before today)
+function isPastDate(date) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const checkDate = new Date(date);
+    checkDate.setHours(0, 0, 0, 0);
+    return checkDate < today;
+}
+
 // Create day column
 function createDayColumn(date, dateKey) {
     const dayColumn = document.createElement('div');
     const isWeekend = date.getDay() === 0 || date.getDay() === 6; // Sunday or Saturday
-    dayColumn.className = `day-column${isToday(date) ? ' today' : ''}${isWeekend ? ' weekend' : ''}`;
+    const past = isPastDate(date);
+    dayColumn.className = `day-column${isToday(date) ? ' today' : ''}${isWeekend ? ' weekend' : ''}${past ? ' past' : ''}`;
 
     // Header
     const header = document.createElement('div');
@@ -516,16 +534,32 @@ function createDayColumn(date, dateKey) {
         }
     });
 
-    // Render tasks for this day
+    // Render tasks for this day (including recurring task instances)
+    const allTasksForDay = [];
+
+    // Add regular tasks
     if (tasks[dateKey]) {
-        tasks[dateKey].forEach(task => {
-            const taskEl = createTaskElement(task, dateKey);
-            tasksContainer.appendChild(taskEl);
-        });
+        allTasksForDay.push(...tasks[dateKey]);
     }
 
+    // Add recurring task instances
+    Object.keys(tasks).forEach(origDateKey => {
+        tasks[origDateKey].forEach(task => {
+            if (task.recurrence) {
+                const instances = getRecurringTaskInstances(task, origDateKey, dateKey, dateKey);
+                allTasksForDay.push(...instances);
+            }
+        });
+    });
+
+    // Render all tasks
+    allTasksForDay.forEach(task => {
+        const taskEl = createTaskElement(task, dateKey);
+        tasksContainer.appendChild(taskEl);
+    });
+
     // If no tasks, show invisible placeholder for click area
-    if (!tasks[dateKey] || tasks[dateKey].length === 0) {
+    if (allTasksForDay.length === 0) {
         const placeholder = document.createElement('div');
         placeholder.className = 'task-placeholder';
         placeholder.textContent = ''; // Empty - no text shown
@@ -574,6 +608,30 @@ function createTaskElement(task, dateKey) {
         notesIndicator.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>';
         notesIndicator.title = 'Has notes';
         indicators.appendChild(notesIndicator);
+    }
+
+    // Recurrence indicator
+    if (task.recurrence) {
+        const recurrenceIndicator = document.createElement('span');
+        recurrenceIndicator.className = 'task-indicator recurrence-indicator';
+        recurrenceIndicator.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>';
+        recurrenceIndicator.title = `Repeats ${task.recurrence.type}`;
+        indicators.appendChild(recurrenceIndicator);
+    }
+
+    // Reminder indicator
+    if (task.reminder) {
+        const reminderIndicator = document.createElement('span');
+        reminderIndicator.className = 'task-indicator reminder-indicator';
+        const reminderDate = new Date(task.reminder);
+        const now = new Date();
+        const isPast = reminderDate < now;
+        reminderIndicator.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>';
+        reminderIndicator.title = `Reminder: ${reminderDate.toLocaleString()}`;
+        if (isPast) {
+            reminderIndicator.style.color = '#ef4444'; // Red if past
+        }
+        indicators.appendChild(reminderIndicator);
     }
 
     if (indicators.children.length > 0) {
@@ -794,6 +852,12 @@ function openTaskPopover(taskId, dateKey, taskElement) {
 
     // Display attached files if any
     displayAttachedFiles(task);
+
+    // Load recurrence data
+    loadRecurrenceData(task);
+
+    // Load reminder data
+    loadReminderData(task);
 
     // Position popover near the task
     const rect = taskElement.getBoundingClientRect();
@@ -1102,6 +1166,284 @@ function syncColorInputs() {
             colorPicker.value = value;
         }
     });
+}
+
+// Recurrence Functions
+function handleRecurrenceTypeChange() {
+    const recurrenceType = document.getElementById('recurrenceType').value;
+    const weeklyOptions = document.getElementById('weeklyOptions');
+    const monthlyOptions = document.getElementById('monthlyOptions');
+    const customOptions = document.getElementById('customOptions');
+    const commonOptions = document.getElementById('recurrenceCommonOptions');
+
+    // Hide all options first
+    weeklyOptions.style.display = 'none';
+    monthlyOptions.style.display = 'none';
+    customOptions.style.display = 'none';
+    commonOptions.style.display = 'none';
+
+    // Show relevant options based on type
+    if (recurrenceType !== 'none') {
+        commonOptions.style.display = 'block';
+
+        if (recurrenceType === 'weekly') {
+            weeklyOptions.style.display = 'block';
+        } else if (recurrenceType === 'monthly') {
+            monthlyOptions.style.display = 'block';
+        } else if (recurrenceType === 'custom') {
+            customOptions.style.display = 'block';
+        }
+    }
+
+    // Save recurrence to task
+    saveRecurrenceToTask();
+}
+
+function toggleWeekday(dayIndex) {
+    const btn = document.querySelector(`.weekday-btn[data-day="${dayIndex}"]`);
+    btn.classList.toggle('active');
+    saveRecurrenceToTask();
+}
+
+function saveRecurrenceToTask() {
+    const { taskId, dateKey } = taskPopoverState;
+    if (!taskId || !dateKey) return;
+
+    const task = tasks[dateKey]?.find(t => t.id === taskId);
+    if (!task) return;
+
+    const recurrenceType = document.getElementById('recurrenceType').value;
+
+    if (recurrenceType === 'none') {
+        delete task.recurrence;
+    } else {
+        const recurrence = {
+            type: recurrenceType,
+            skipWeekends: document.getElementById('skipWeekends').checked,
+            endDate: document.getElementById('recurrenceEndDate').value || null
+        };
+
+        if (recurrenceType === 'weekly') {
+            const selectedDays = [];
+            document.querySelectorAll('.weekday-btn.active').forEach(btn => {
+                selectedDays.push(parseInt(btn.dataset.day));
+            });
+            recurrence.weekdays = selectedDays;
+        } else if (recurrenceType === 'monthly') {
+            recurrence.dayOfMonth = parseInt(document.getElementById('monthlyDay').value) || 1;
+        } else if (recurrenceType === 'custom') {
+            recurrence.interval = parseInt(document.getElementById('customInterval').value) || 1;
+            recurrence.unit = document.getElementById('customUnit').value;
+        }
+
+        task.recurrence = recurrence;
+    }
+
+    saveTasksToStorage();
+    renderWeek(); // Re-render to show recurrence indicator
+}
+
+function loadRecurrenceData(task) {
+    const recurrenceType = document.getElementById('recurrenceType');
+    const skipWeekends = document.getElementById('skipWeekends');
+    const endDate = document.getElementById('recurrenceEndDate');
+
+    if (!task.recurrence) {
+        recurrenceType.value = 'none';
+        skipWeekends.checked = false;
+        endDate.value = '';
+        handleRecurrenceTypeChange();
+        return;
+    }
+
+    const rec = task.recurrence;
+    recurrenceType.value = rec.type;
+    skipWeekends.checked = rec.skipWeekends || false;
+    endDate.value = rec.endDate || '';
+
+    if (rec.type === 'weekly' && rec.weekdays) {
+        document.querySelectorAll('.weekday-btn').forEach(btn => {
+            btn.classList.remove('active');
+            if (rec.weekdays.includes(parseInt(btn.dataset.day))) {
+                btn.classList.add('active');
+            }
+        });
+    } else if (rec.type === 'monthly' && rec.dayOfMonth) {
+        document.getElementById('monthlyDay').value = rec.dayOfMonth;
+    } else if (rec.type === 'custom') {
+        document.getElementById('customInterval').value = rec.interval || 1;
+        document.getElementById('customUnit').value = rec.unit || 'days';
+    }
+
+    handleRecurrenceTypeChange();
+}
+
+function getRecurringTaskInstances(task, originalDateKey, startDate, endDate) {
+    if (!task.recurrence) return [];
+
+    const rec = task.recurrence;
+    const instances = [];
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const originalDate = new Date(originalDateKey);
+
+    let currentDate = new Date(originalDate);
+
+    // Generate instances up to 365 days or endDate (whichever is sooner)
+    const maxDate = new Date(start);
+    maxDate.setDate(maxDate.getDate() + 365);
+    const limitDate = rec.endDate ? new Date(rec.endDate) : maxDate;
+    const effectiveEnd = limitDate < end ? limitDate : end;
+
+    while (currentDate <= effectiveEnd) {
+        // Skip if before start date
+        if (currentDate >= start && currentDate <= effectiveEnd) {
+            const dateKey = formatDateKey(currentDate);
+
+            // Skip weekends if option is enabled
+            if (rec.skipWeekends && (currentDate.getDay() === 0 || currentDate.getDay() === 6)) {
+                // Skip this date
+            } else if (rec.type === 'weekly' && rec.weekdays && rec.weekdays.length > 0) {
+                // Only include if current day matches selected weekdays
+                if (rec.weekdays.includes(currentDate.getDay())) {
+                    instances.push({ ...task, id: `${task.id}-${dateKey}`, originalId: task.id, dateKey });
+                }
+            } else {
+                instances.push({ ...task, id: `${task.id}-${dateKey}`, originalId: task.id, dateKey });
+            }
+        }
+
+        // Move to next occurrence
+        if (rec.type === 'daily') {
+            currentDate.setDate(currentDate.getDate() + 1);
+        } else if (rec.type === 'weekly') {
+            currentDate.setDate(currentDate.getDate() + 1);
+        } else if (rec.type === 'monthly') {
+            currentDate.setMonth(currentDate.getMonth() + 1);
+        } else if (rec.type === 'yearly') {
+            currentDate.setFullYear(currentDate.getFullYear() + 1);
+        } else if (rec.type === 'custom') {
+            if (rec.unit === 'days') {
+                currentDate.setDate(currentDate.getDate() + rec.interval);
+            } else if (rec.unit === 'weeks') {
+                currentDate.setDate(currentDate.getDate() + (rec.interval * 7));
+            } else if (rec.unit === 'months') {
+                currentDate.setMonth(currentDate.getMonth() + rec.interval);
+            }
+        }
+
+        // Safety check to prevent infinite loops
+        if (instances.length > 500) break;
+    }
+
+    return instances;
+}
+
+function formatDateKey(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+// Reminder Functions
+function saveReminderToTask() {
+    const { taskId, dateKey } = taskPopoverState;
+    if (!taskId || !dateKey) return;
+
+    const task = tasks[dateKey]?.find(t => t.id === taskId);
+    if (!task) return;
+
+    const reminderDatetime = document.getElementById('reminderDatetime').value;
+
+    if (reminderDatetime) {
+        task.reminder = reminderDatetime;
+        document.getElementById('removeReminderBtn').style.display = 'flex';
+    } else {
+        delete task.reminder;
+        document.getElementById('removeReminderBtn').style.display = 'none';
+    }
+
+    saveTasksToStorage();
+    renderWeek(); // Re-render to show reminder indicator
+}
+
+function loadReminderData(task) {
+    const reminderDatetime = document.getElementById('reminderDatetime');
+    const removeBtn = document.getElementById('removeReminderBtn');
+
+    if (task.reminder) {
+        reminderDatetime.value = task.reminder;
+        removeBtn.style.display = 'flex';
+    } else {
+        reminderDatetime.value = '';
+        removeBtn.style.display = 'none';
+    }
+}
+
+function removeReminder() {
+    const { taskId, dateKey } = taskPopoverState;
+    if (!taskId || !dateKey) return;
+
+    const task = tasks[dateKey]?.find(t => t.id === taskId);
+    if (!task) return;
+
+    delete task.reminder;
+    document.getElementById('reminderDatetime').value = '';
+    document.getElementById('removeReminderBtn').style.display = 'none';
+
+    saveTasksToStorage();
+    renderWeek();
+}
+
+function checkReminders() {
+    const now = new Date();
+
+    Object.keys(tasks).forEach(dateKey => {
+        tasks[dateKey].forEach(task => {
+            if (task.reminder && !task.reminderShown) {
+                const reminderTime = new Date(task.reminder);
+
+                // Show notification if reminder time has passed
+                if (now >= reminderTime) {
+                    showReminderNotification(task, dateKey);
+                    task.reminderShown = true;
+                    saveTasksToStorage();
+                }
+            }
+        });
+    });
+}
+
+function showReminderNotification(task, dateKey) {
+    // Request permission if not granted
+    if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('Task Reminder', {
+            body: task.text,
+            icon: '/icon.png', // Optional: add an icon
+            badge: '/badge.png', // Optional: add a badge
+            tag: `task-${task.id}`, // Prevent duplicate notifications
+            requireInteraction: false
+        });
+    } else if ('Notification' in window && Notification.permission !== 'denied') {
+        Notification.requestPermission().then(permission => {
+            if (permission === 'granted') {
+                new Notification('Task Reminder', {
+                    body: task.text,
+                    tag: `task-${task.id}`
+                });
+            }
+        });
+    }
+
+    // Always show browser alert as fallback
+    // alert(`Reminder: ${task.text}`);
+}
+
+function requestNotificationPermission() {
+    if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+    }
 }
 
 // Apply text formatting in popover
@@ -1897,6 +2239,9 @@ function renderMonth() {
         if (isToday(date)) {
             cell.classList.add('today');
         }
+        if (isPastDate(date)) {
+            cell.classList.add('past');
+        }
 
         // Day number
         const dayNumber = document.createElement('div');
@@ -1904,22 +2249,38 @@ function renderMonth() {
         dayNumber.textContent = date.getDate();
         cell.appendChild(dayNumber);
 
-        // Tasks preview
+        // Tasks preview (including recurring tasks)
         const tasksPreview = document.createElement('div');
         tasksPreview.className = 'month-tasks-preview';
 
+        // Collect all tasks for this day
+        const allTasksForDay = [];
         if (tasks[dateKey]) {
+            allTasksForDay.push(...tasks[dateKey]);
+        }
+
+        // Add recurring task instances
+        Object.keys(tasks).forEach(origDateKey => {
+            tasks[origDateKey].forEach(task => {
+                if (task.recurrence) {
+                    const instances = getRecurringTaskInstances(task, origDateKey, dateKey, dateKey);
+                    allTasksForDay.push(...instances);
+                }
+            });
+        });
+
+        if (allTasksForDay.length > 0) {
             const maxDots = 3;
-            tasks[dateKey].slice(0, maxDots).forEach(task => {
+            allTasksForDay.slice(0, maxDots).forEach(task => {
                 const dot = document.createElement('div');
                 dot.className = `month-task-dot ${task.color || 'default'}`;
                 tasksPreview.appendChild(dot);
             });
 
-            if (tasks[dateKey].length > maxDots) {
+            if (allTasksForDay.length > maxDots) {
                 const more = document.createElement('div');
                 more.className = 'month-more-tasks';
-                more.textContent = `+${tasks[dateKey].length - maxDots} more`;
+                more.textContent = `+${allTasksForDay.length - maxDots} more`;
                 tasksPreview.appendChild(more);
             }
         }
@@ -1992,9 +2353,24 @@ function renderDay() {
         }
     });
 
-    // Render tasks
-    if (tasks[dateKey] && tasks[dateKey].length > 0) {
-        tasks[dateKey].forEach(task => {
+    // Render tasks (including recurring tasks)
+    const allTasksForDay = [];
+    if (tasks[dateKey]) {
+        allTasksForDay.push(...tasks[dateKey]);
+    }
+
+    // Add recurring task instances
+    Object.keys(tasks).forEach(origDateKey => {
+        tasks[origDateKey].forEach(task => {
+            if (task.recurrence) {
+                const instances = getRecurringTaskInstances(task, origDateKey, dateKey, dateKey);
+                allTasksForDay.push(...instances);
+            }
+        });
+    });
+
+    if (allTasksForDay.length > 0) {
+        allTasksForDay.forEach(task => {
             const taskEl = createTaskElement(task, dateKey);
             tasksDiv.appendChild(taskEl);
         });
@@ -2537,6 +2913,26 @@ function setupEventListeners() {
             setSearchColorFilter(color);
         });
     });
+
+    // Recurrence event listeners
+    document.getElementById('recurrenceType').addEventListener('change', handleRecurrenceTypeChange);
+
+    document.querySelectorAll('.weekday-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            toggleWeekday(parseInt(btn.dataset.day));
+        });
+    });
+
+    document.getElementById('skipWeekends').addEventListener('change', saveRecurrenceToTask);
+    document.getElementById('recurrenceEndDate').addEventListener('change', saveRecurrenceToTask);
+    document.getElementById('monthlyDay').addEventListener('change', saveRecurrenceToTask);
+    document.getElementById('customInterval').addEventListener('change', saveRecurrenceToTask);
+    document.getElementById('customUnit').addEventListener('change', saveRecurrenceToTask);
+
+    // Reminder event listeners
+    document.getElementById('reminderDatetime').addEventListener('change', saveReminderToTask);
+    document.getElementById('removeReminderBtn').addEventListener('click', removeReminder);
 
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {

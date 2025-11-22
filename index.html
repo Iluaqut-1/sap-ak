@@ -365,6 +365,94 @@
             <!-- Attached files display -->
             <div class="attached-files" id="attachedFiles"></div>
 
+            <!-- Recurrence section -->
+            <div class="task-recurrence-section">
+                <label class="task-section-label">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M23 4v6h-6"></path>
+                        <path d="M1 20v-6h6"></path>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                    </svg>
+                    Repeat
+                </label>
+                <select class="recurrence-select" id="recurrenceType">
+                    <option value="none">Does not repeat</option>
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                    <option value="custom">Custom</option>
+                </select>
+
+                <!-- Weekly options -->
+                <div class="recurrence-options weekly-options" id="weeklyOptions" style="display: none;">
+                    <div class="weekday-selector">
+                        <button class="weekday-btn" data-day="0" type="button">S</button>
+                        <button class="weekday-btn" data-day="1" type="button">M</button>
+                        <button class="weekday-btn" data-day="2" type="button">T</button>
+                        <button class="weekday-btn" data-day="3" type="button">W</button>
+                        <button class="weekday-btn" data-day="4" type="button">T</button>
+                        <button class="weekday-btn" data-day="5" type="button">F</button>
+                        <button class="weekday-btn" data-day="6" type="button">S</button>
+                    </div>
+                </div>
+
+                <!-- Monthly options -->
+                <div class="recurrence-options monthly-options" id="monthlyOptions" style="display: none;">
+                    <label class="recurrence-option-label">
+                        Day of month:
+                        <input type="number" class="monthly-day-input" id="monthlyDay" min="1" max="31" value="1">
+                    </label>
+                </div>
+
+                <!-- Custom options -->
+                <div class="recurrence-options custom-options" id="customOptions" style="display: none;">
+                    <div class="custom-recurrence-builder">
+                        <label class="recurrence-option-label">
+                            Every
+                            <input type="number" class="custom-interval-input" id="customInterval" min="1" value="1">
+                            <select class="custom-unit-select" id="customUnit">
+                                <option value="days">days</option>
+                                <option value="weeks">weeks</option>
+                                <option value="months">months</option>
+                            </select>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Common options for all recurring tasks -->
+                <div class="recurrence-common-options" id="recurrenceCommonOptions" style="display: none;">
+                    <label class="recurrence-checkbox-label">
+                        <input type="checkbox" id="skipWeekends" class="recurrence-checkbox">
+                        <span>Skip weekends</span>
+                    </label>
+                    <label class="recurrence-option-label">
+                        End date:
+                        <input type="date" class="recurrence-end-date" id="recurrenceEndDate">
+                    </label>
+                </div>
+            </div>
+
+            <!-- Reminders section -->
+            <div class="task-reminders-section">
+                <label class="task-section-label">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                    Reminder
+                </label>
+                <div class="reminder-controls">
+                    <input type="datetime-local" class="reminder-datetime" id="reminderDatetime">
+                    <button class="remove-reminder-btn" id="removeReminderBtn" style="display: none;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
             <!-- Color picker in popover -->
             <div class="task-color-picker">
                 <div class="color-picker-label">Task Color:</div>

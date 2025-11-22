@@ -347,6 +347,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadLanguageFromStorage();
     loadViewFromStorage();
     loadCustomColors();
+    loadThemeFromStorage(); // Load saved theme
     updateTranslations();
     setupEventListeners();
     switchView(currentView); // Start with saved view
@@ -1444,6 +1445,33 @@ function requestNotificationPermission() {
     if ('Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission();
     }
+}
+
+// Theme Functions
+function setTheme(themeName) {
+    // Remove all theme classes
+    document.body.classList.remove('theme-blue', 'theme-dark', 'theme-minimal');
+
+    // Add new theme class if not default
+    if (themeName && themeName !== 'default') {
+        document.body.classList.add(`theme-${themeName}`);
+    }
+
+    // Save to localStorage
+    localStorage.setItem('weeklyPlannerTheme', themeName || 'default');
+
+    // Update active state on theme buttons
+    document.querySelectorAll('.theme-option').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.theme === (themeName || 'default')) {
+            btn.classList.add('active');
+        }
+    });
+}
+
+function loadThemeFromStorage() {
+    const theme = localStorage.getItem('weeklyPlannerTheme') || 'default';
+    setTheme(theme);
 }
 
 // Apply text formatting in popover
@@ -2933,6 +2961,15 @@ function setupEventListeners() {
     // Reminder event listeners
     document.getElementById('reminderDatetime').addEventListener('change', saveReminderToTask);
     document.getElementById('removeReminderBtn').addEventListener('click', removeReminder);
+
+    // Theme event listeners
+    document.querySelectorAll('.theme-option').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const theme = btn.dataset.theme;
+            setTheme(theme);
+            closeMenu(); // Close menu after selecting theme
+        });
+    });
 
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {

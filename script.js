@@ -2862,6 +2862,174 @@ function handleShare() {
     }
 }
 
+// Calendar sync functions (iCalendar export/import)
+function exportCalendarToICS() {
+    closeMenu();
+    const currentCalendar = calendars.find(c => c.id === currentCalendarId);
+    if (!currentCalendar) return;
+
+    // Build iCalendar file content
+    let icsContent = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//Weekly Planner//EN',
+        `X-WR-CALNAME:${currentCalendar.name}`,
+        'X-WR-TIMEZONE:UTC',
+        'CALSCALE:GREGORIAN',
+        'METHOD:PUBLISH'
+    ];
+
+    // Add all tasks as events
+    Object.keys(currentCalendar.tasks || {}).forEach(dateKey => {
+        const tasksForDate = currentCalendar.tasks[dateKey] || [];
+        tasksForDate.forEach(task => {
+            const date = new Date(dateKey);
+            const dateStr = date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+
+            // Create unique ID for event
+            const uid = `task-${task.id}@weeklyplanner`;
+
+            // Format description with notes and subtasks
+            let description = task.text || '';
+            if (task.notes) {
+                description += '\\n\\nNotes: ' + task.notes.replace(/\n/g, '\\n');
+            }
+            if (task.subtasks && task.subtasks.length > 0) {
+                description += '\\n\\nSubtasks:';
+                task.subtasks.forEach(st => {
+                    description += `\\n- [${st.completed ? 'X' : ' '}] ${st.text}`;
+                });
+            }
+
+            icsContent.push(
+                'BEGIN:VEVENT',
+                `UID:${uid}`,
+                `DTSTAMP:${dateStr}`,
+                `DTSTART;VALUE=DATE:${dateStr.split('T')[0]}`,
+                `SUMMARY:${task.text || 'Untitled Task'}`,
+                `DESCRIPTION:${description}`,
+                `STATUS:${task.completed ? 'COMPLETED' : 'NEEDS-ACTION'}`,
+                task.color ? `CATEGORIES:${task.color}` : '',
+                'END:VEVENT'
+            );
+        });
+    });
+
+    icsContent.push('END:VCALENDAR');
+
+    // Create downloadable file
+    const blob = new Blob([icsContent.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${currentCalendar.name.replace(/\s+/g, '_')}.ics`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
+function importCalendarFromICS() {
+    closeMenu();
+
+    // Create file input
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.ics,.ical';
+
+    input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                parseICSFile(event.target.result);
+                alert('Calendar imported successfully!');
+            } catch (error) {
+                console.error('Error parsing ICS file:', error);
+                alert('Failed to import calendar. Please check the file format.');
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    input.click();
+}
+
+function parseICSFile(icsContent) {
+    const lines = icsContent.split(/\r?\n/);
+    let inEvent = false;
+    let currentEvent = {};
+    let importedTasks = {};
+
+    lines.forEach(line => {
+        line = line.trim();
+
+        if (line === 'BEGIN:VEVENT') {
+            inEvent = true;
+            currentEvent = {};
+        } else if (line === 'END:VEVENT' && inEvent) {
+            inEvent = false;
+
+            // Convert event to task
+            if (currentEvent.dtstart && currentEvent.summary) {
+                const dateKey = currentEvent.dtstart;
+
+                if (!importedTasks[dateKey]) {
+                    importedTasks[dateKey] = [];
+                }
+
+                const task = {
+                    id: 'task-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9),
+                    text: currentEvent.summary,
+                    completed: currentEvent.status === 'COMPLETED',
+                    color: currentEvent.categories || 'default',
+                    notes: currentEvent.description || '',
+                    subtasks: []
+                };
+
+                importedTasks[dateKey].push(task);
+            }
+        } else if (inEvent) {
+            // Parse event properties
+            if (line.startsWith('DTSTART')) {
+                const match = line.match(/DTSTART[^:]*:(\d{8})/);
+                if (match) {
+                    const dateStr = match[1];
+                    const year = dateStr.substr(0, 4);
+                    const month = dateStr.substr(4, 2);
+                    const day = dateStr.substr(6, 2);
+                    currentEvent.dtstart = `${year}-${month}-${day}`;
+                }
+            } else if (line.startsWith('SUMMARY:')) {
+                currentEvent.summary = line.substring(8).replace(/\\n/g, '\n');
+            } else if (line.startsWith('DESCRIPTION:')) {
+                currentEvent.description = line.substring(12).replace(/\\n/g, '\n');
+            } else if (line.startsWith('STATUS:')) {
+                currentEvent.status = line.substring(7);
+            } else if (line.startsWith('CATEGORIES:')) {
+                currentEvent.categories = line.substring(11);
+            }
+        }
+    });
+
+    // Merge imported tasks with current calendar
+    const currentCalendar = calendars.find(c => c.id === currentCalendarId);
+    if (currentCalendar) {
+        Object.keys(importedTasks).forEach(dateKey => {
+            if (!currentCalendar.tasks[dateKey]) {
+                currentCalendar.tasks[dateKey] = [];
+            }
+            currentCalendar.tasks[dateKey].push(...importedTasks[dateKey]);
+        });
+
+        tasks = currentCalendar.tasks;
+        saveCalendarsToStorage();
+        switchView(currentView); // Refresh view
+    }
+}
+
 function openSupportModal() {
     closeMenu();
     const modal = document.getElementById('supportModal');
@@ -3063,6 +3231,8 @@ function setupEventListeners() {
     document.getElementById('printBtn').addEventListener('click', handlePrint);
     document.getElementById('shareBtn').addEventListener('click', handleShare);
     document.getElementById('supportBtn').addEventListener('click', openSupportModal);
+    document.getElementById('exportCalendarBtn').addEventListener('click', exportCalendarToICS);
+    document.getElementById('importCalendarBtn').addEventListener('click', importCalendarFromICS);
 
     document.getElementById('languageSelect').addEventListener('change', (e) => {
         changeLanguage(e.target.value);

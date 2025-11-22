@@ -12,6 +12,10 @@ let isCloning = false;
 let draggedOverTask = null;
 let customColors = [];
 
+// Calendar management
+let calendars = [];
+let currentCalendarId = null;
+
 // Internationalization
 const translations = {
     en: {
@@ -343,13 +347,14 @@ function renderSharedTask(taskData) {
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
-    loadTasksFromStorage();
+    loadCalendarsFromStorage(); // Load calendars (which loads tasks internally)
     loadLanguageFromStorage();
     loadViewFromStorage();
     loadCustomColors();
     loadThemeFromStorage(); // Load saved theme
     updateTranslations();
     setupEventListeners();
+    renderCalendarList(); // Render calendar selector
     switchView(currentView); // Start with saved view
     loadSharedTaskFromURL(); // Check if there's a shared task in URL
 
@@ -2629,13 +2634,188 @@ function setSearchColorFilter(color) {
 
 // Local storage
 function saveTasksToStorage() {
-    localStorage.setItem('weeklyPlannerTasks', JSON.stringify(tasks));
+    // Save tasks to current calendar
+    const currentCalendar = calendars.find(c => c.id === currentCalendarId);
+    if (currentCalendar) {
+        currentCalendar.tasks = tasks;
+        saveCalendarsToStorage();
+    } else {
+        // Fallback to old storage method if calendars not initialized
+        localStorage.setItem('weeklyPlannerTasks', JSON.stringify(tasks));
+    }
 }
 
 function loadTasksFromStorage() {
     const stored = localStorage.getItem('weeklyPlannerTasks');
     if (stored) {
         tasks = JSON.parse(stored);
+    }
+}
+
+// Calendar management functions
+function saveCalendarsToStorage() {
+    localStorage.setItem('weeklyPlannerCalendars', JSON.stringify(calendars));
+    localStorage.setItem('weeklyPlannerCurrentCalendar', currentCalendarId);
+}
+
+function loadCalendarsFromStorage() {
+    const stored = localStorage.getItem('weeklyPlannerCalendars');
+    if (stored) {
+        calendars = JSON.parse(stored);
+    }
+
+    // If no calendars exist, create default calendar
+    if (calendars.length === 0) {
+        calendars = [{
+            id: 'default',
+            name: 'My Calendar',
+            color: '#818cf8',
+            tasks: {}
+        }];
+    }
+
+    // Load current calendar
+    const storedCurrent = localStorage.getItem('weeklyPlannerCurrentCalendar');
+    currentCalendarId = storedCurrent || calendars[0].id;
+
+    // Load tasks from current calendar
+    const currentCalendar = calendars.find(c => c.id === currentCalendarId);
+    if (currentCalendar) {
+        tasks = currentCalendar.tasks || {};
+    }
+}
+
+function switchCalendar(calendarId) {
+    // Save current calendar's tasks
+    const currentCalendar = calendars.find(c => c.id === currentCalendarId);
+    if (currentCalendar) {
+        currentCalendar.tasks = tasks;
+    }
+
+    // Switch to new calendar
+    currentCalendarId = calendarId;
+    const newCalendar = calendars.find(c => c.id === calendarId);
+    if (newCalendar) {
+        tasks = newCalendar.tasks || {};
+        saveCalendarsToStorage();
+        renderCalendarList();
+        switchView(currentView); // Re-render current view
+    }
+}
+
+function createCalendar(name) {
+    const newCalendar = {
+        id: 'cal-' + Date.now(),
+        name: name || 'New Calendar',
+        color: '#818cf8',
+        tasks: {}
+    };
+
+    calendars.push(newCalendar);
+    saveCalendarsToStorage();
+    renderCalendarList();
+    return newCalendar;
+}
+
+function deleteCalendar(calendarId) {
+    // Don't allow deleting the last calendar
+    if (calendars.length <= 1) {
+        alert('Cannot delete the last calendar');
+        return;
+    }
+
+    // Don't allow deleting current calendar without switching
+    if (calendarId === currentCalendarId) {
+        alert('Please switch to another calendar before deleting this one');
+        return;
+    }
+
+    calendars = calendars.filter(c => c.id !== calendarId);
+    saveCalendarsToStorage();
+    renderCalendarList();
+}
+
+function renameCalendar(calendarId, newName) {
+    const calendar = calendars.find(c => c.id === calendarId);
+    if (calendar) {
+        calendar.name = newName;
+        saveCalendarsToStorage();
+        renderCalendarList();
+    }
+}
+
+function renderCalendarList() {
+    const calendarList = document.getElementById('calendarList');
+    const currentCalendarName = document.getElementById('currentCalendarName');
+
+    if (!calendarList || !currentCalendarName) return;
+
+    // Update current calendar name in header
+    const currentCalendar = calendars.find(c => c.id === currentCalendarId);
+    if (currentCalendar) {
+        currentCalendarName.textContent = currentCalendar.name;
+    }
+
+    // Render calendar list
+    calendarList.innerHTML = calendars.map(calendar => {
+        const isActive = calendar.id === currentCalendarId;
+        return `
+            <div class="calendar-dropdown-item ${isActive ? 'active' : ''}" data-calendar-id="${calendar.id}">
+                <div class="calendar-item-left">
+                    <div class="calendar-color-dot" style="background-color: ${calendar.color}"></div>
+                    <span class="calendar-name">${calendar.name}</span>
+                </div>
+                <div class="calendar-item-actions">
+                    ${!isActive ? `<button class="calendar-action-btn delete-calendar-btn" data-calendar-id="${calendar.id}" title="Delete calendar">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        </svg>
+                    </button>` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    // Add event listeners to calendar items
+    calendarList.querySelectorAll('.calendar-dropdown-item').forEach(item => {
+        const calendarId = item.dataset.calendarId;
+
+        item.addEventListener('click', (e) => {
+            // Don't trigger if clicking on delete button
+            if (e.target.closest('.delete-calendar-btn')) return;
+
+            if (calendarId !== currentCalendarId) {
+                switchCalendar(calendarId);
+                toggleCalendarDropdown(); // Close dropdown
+            }
+        });
+    });
+
+    // Add event listeners to delete buttons
+    calendarList.querySelectorAll('.delete-calendar-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const calendarId = btn.dataset.calendarId;
+            const calendar = calendars.find(c => c.id === calendarId);
+            if (calendar && confirm(`Delete "${calendar.name}"?`)) {
+                deleteCalendar(calendarId);
+            }
+        });
+    });
+}
+
+function toggleCalendarDropdown() {
+    const dropdown = document.getElementById('calendarDropdown');
+    if (dropdown) {
+        dropdown.classList.toggle('active');
+    }
+}
+
+function openAddCalendarDialog() {
+    const name = prompt('Enter calendar name:');
+    if (name && name.trim()) {
+        createCalendar(name.trim());
     }
 }
 
@@ -2971,6 +3151,33 @@ function setupEventListeners() {
         });
     });
 
+    // Calendar event listeners
+    const calendarSelectorBtn = document.getElementById('calendarSelectorBtn');
+    const calendarDropdown = document.getElementById('calendarDropdown');
+    const addCalendarBtn = document.getElementById('addCalendarBtn');
+
+    if (calendarSelectorBtn) {
+        calendarSelectorBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleCalendarDropdown();
+        });
+    }
+
+    if (addCalendarBtn) {
+        addCalendarBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openAddCalendarDialog();
+            toggleCalendarDropdown(); // Close dropdown after opening dialog
+        });
+    }
+
+    // Close calendar dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+        if (calendarDropdown && !calendarDropdown.contains(e.target) && !calendarSelectorBtn.contains(e.target)) {
+            calendarDropdown.classList.remove('active');
+        }
+    });
+
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
@@ -2980,6 +3187,10 @@ function setupEventListeners() {
             closeTaskPopover();
             closeSearch();
             closeSharedTaskModal();
+            // Close calendar dropdown
+            if (calendarDropdown) {
+                calendarDropdown.classList.remove('active');
+            }
         }
     });
 }
